@@ -12,6 +12,16 @@ logo, detail), Ringkasan bulanan, Target (daftar), Akun (profil, tema, kurangi e
 di API app (koreksi saldo/ubah/arsip dompet, buat target, ubah profil, utang & piutang, kategori, ekspor, akun demo)
 membuka halaman yang sama di web Lajur.
 
+## Pratinjau cepat di browser
+
+```bash
+npm run preview
+```
+
+Lalu buka http://localhost:8090 di Chrome (Ctrl+Shift+M = ukuran HP) dan masuk dengan akun Lajur lokal. Perintah ini
+menyalakan Lajur lokal (repo `money-management` di sebelah repo ini) kalau belum jalan, proxy, dan versi web app.
+Ctrl+C mematikan semuanya.
+
 ## Menjalankan saat pengembangan
 
 1. Pasang **Expo Go** di HP Android (Play Store).
