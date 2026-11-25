@@ -111,9 +111,12 @@ export type Transaction = {
   fromWalletId: number | null;
   fromWalletName: string | null;
   fromWalletType: WalletType | null;
+  /** Nama orang kalau dompetnya dompet pinjaman (label "Pinjamkan ke Andi"). */
+  fromCounterparty?: string | null;
   toWalletId: number | null;
   toWalletName: string | null;
   toWalletType: WalletType | null;
+  toCounterparty?: string | null;
   categoryId: number | null;
   categoryName: string | null;
   /** Nama ikon Boxicons kategori (kolom categories.icon); null = Tag. */
@@ -121,6 +124,37 @@ export type Transaction = {
 };
 
 export type Category = { id: number; name: string; kind: "expense" | "income"; icon: string | null; usageCount: number };
+
+/** Kategori di halaman Kategori (US-11): termasuk yang diarsipkan. */
+export type ManagedCategory = Category & { archivedAt: string | null };
+
+export type DebtType = "receivable" | "payable";
+
+/** Pinjaman (dompet utang/piutang per orang, BR-19) dengan angka yang dihitung server seperti web. */
+export type Debt = {
+  id: number;
+  name: string;
+  type: DebtType;
+  counterparty: string;
+  dueDate: string | null;
+  /** Saldo dompet: piutang ≥ 0, utang ≤ 0. */
+  balance: number;
+  /** Total pinjaman (semua penambahan sisa). */
+  total: number;
+  lastDate: string | null;
+  archived: boolean;
+  /** Sisa sebagai angka positif. */
+  remaining: number;
+  settled: boolean;
+  /** Label jatuh tempo (US-18); null kalau lunas atau tanpa tanggal. */
+  due: { text: string; overdue: boolean } | null;
+};
+
+export type DebtList = { today: string; debts: Debt[]; counterparties: string[] };
+export type DebtDetail = { today: string; debt: Debt; history: Transaction[] };
+
+/** Transaksi di Sampah (BR-10): `daysAgo` = umur hapus menurut server. */
+export type TrashItem = Transaction & { daysAgo: number };
 
 export type CategoryShare = {
   type: "expense" | "income";
@@ -150,6 +184,8 @@ export type Home = {
   recentTransactions: Transaction[];
   /** Target belum tercapai, maks. 2. */
   goals: Goal[];
+  /** Dompet aktif terakhir dipakai: bawaan form "Catat transaksi" (US-06). */
+  lastWalletId: number | null;
 };
 
 export type GoalProgress = { share: number; remaining: number; achieved: boolean; daysLeft: number | null };

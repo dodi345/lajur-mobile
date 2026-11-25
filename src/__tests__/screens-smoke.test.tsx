@@ -80,8 +80,19 @@ const home: Home = {
   summary,
   recentTransactions: transactions,
   goals: [goal],
+  lastWalletId: 2,
 };
 const categories: Category[] = [{ id: 3, name: "Makan", kind: "expense", icon: "BowlRice", usageCount: 4 }];
+const debt = {
+  id: 30, name: "Piutang: Andi", type: "receivable", counterparty: "Andi", dueDate: "2026-11-20", balance: 60_000, total: 100_000,
+  lastDate: "2026-11-24", archived: false, remaining: 60_000, settled: false, due: { text: "Lewat jatuh tempo 5 hari", overdue: true },
+};
+const loan: Transaction = {
+  id: 20, type: "transfer", amount: 100_000, transactionDate: "2026-11-24", note: null,
+  fromWalletId: 1, fromWalletName: "BCA Utama", fromWalletType: "bank", fromCounterparty: null,
+  toWalletId: 30, toWalletName: "Piutang: Andi", toWalletType: "receivable", toCounterparty: "Andi",
+  categoryId: null, categoryName: null, categoryIcon: null,
+};
 
 function apiResponse(path: string): unknown {
   const url = new URL(path, "https://contoh.test");
@@ -114,7 +125,9 @@ function apiResponse(path: string): unknown {
         { id: 5, name: "Celengan", brand: null, balance: 0, usedBy: null },
       ],
     },
-    "/api/v1/categories": { categories },
+    "/api/v1/categories": url.searchParams.get("view") === "manage"
+      ? { active: categories.map((category) => ({ ...category, archivedAt: null })), archived: [] }
+      : { categories },
     "/api/v1/transactions": {
       month: "2026-11",
       today: "2026-11-25",
@@ -127,6 +140,11 @@ function apiResponse(path: string): unknown {
       ],
     },
     "/api/v1/transactions/10": { transaction: transactions[0] },
+    "/api/v1/transactions/20": { transaction: loan },
+    "/api/v1/debts": { today: "2026-11-25", debts: [debt], counterparties: ["Andi"] },
+    "/api/v1/debts/30": { today: "2026-11-25", debt, history: [loan] },
+    "/api/v1/categories/3": { category: { ...categories[0], archivedAt: null } },
+    "/api/v1/trash": { items: [{ ...transactions[0], daysAgo: 6 }] },
     "/api/v1/summary": { month: "2026-11", summary },
   };
   if (!(url.pathname in routes)) throw new Error(`Rute API tidak terduga: ${url.pathname}`);
@@ -167,6 +185,16 @@ const cases: [string, string | RegExp][] = [
   ["/goal/8", "Dana darurat (diarsipkan)"],
   ["/goal/7/deposit", "Tabung ke Dana darurat"],
   ["/goal/new", 'Sudah dipakai target "Dana darurat"'],
+  ["/debts", "Lewat jatuh tempo 5 hari"],
+  ["/debt/30", "Pinjamkan ke Andi"],
+  ["/debt/30/pay", "Simpan bayaran dari Andi"],
+  ["/debt/new", "Pinjaman lama"],
+  ["/transaction/20", "Buka pinjaman"],
+  ["/categories", "4 transaksi"],
+  ["/category/3", "Dipakai di 4 transaksi"],
+  ["/trash", /dihapus 6 hari lalu/],
+  // Sudah punya dompet → bukan onboarding lagi: "Tambah dompet" biasa dengan form yang sama.
+  ["/onboarding", "Simpan & tambah dompet lain"],
   ["/sessions", "Terakhir aktif 24 Nov 2026, 14.05"],
   ["/profile/email", "Belum dikonfirmasi"],
   ["/profile/password", "Ulangi password baru"],

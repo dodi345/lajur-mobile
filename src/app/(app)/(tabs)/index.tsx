@@ -1,14 +1,13 @@
 import { router, useFocusEffect } from "expo-router";
 import { setStatusBarStyle } from "expo-status-bar";
 import { useCallback, useEffect, useState } from "react";
-import { Animated, Easing, Linking, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { Animated, Easing, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { CategoryBreakdown, GoalCard, SummaryStats, TransactionRow, WalletCard } from "@/components/finance";
+import { CategoryBreakdown, GoalCard, openTransactions, SummaryStats, TransactionRow, WalletCard } from "@/components/finance";
 import { Icon } from "@/components/icon";
 import { NAV_SPACE } from "@/components/screen";
 import { useToast } from "@/components/toast";
 import { AppText, Button, ErrorState, InsetCard, Loading, SectionHeader } from "@/components/ui";
-import { API_URL } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { monthLabel } from "@/lib/date";
 import { formatRupiah } from "@/lib/money";
@@ -23,7 +22,17 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const home = useHome();
   const profile = useProfile();
-  const { user } = useAuth();
+  const { user, newAccount, clearNewAccount } = useAuth();
+  // Nama dan status email terbaru dari profil (berubah setelah ganti nama/konfirmasi email); sebelum profil
+  // termuat, pakai data sesi saat masuk.
+  const me = profile.data?.profile ?? user;
+
+  // Baru daftar → langsung "Siapkan dompet pertama", seperti web (redirect ke /wallets/new).
+  useEffect(() => {
+    if (!newAccount) return;
+    clearNewAccount();
+    router.push("/onboarding");
+  }, [newAccount, clearNewAccount]);
   // Hero "sticky": ikut di dalam area gulir tapi digeser balik sejauh guliran, lembar konten menutupinya.
   const [scrollY] = useState(() => new Animated.Value(0));
   const heroShift = scrollY.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolateLeft: "clamp" });
@@ -61,7 +70,7 @@ export default function HomeScreen() {
       >
         <View style={[styles.circleA, { top: -70 }]} />
         <View style={[styles.circleB, { top: 60 }]} />
-        <Greeting name={user?.name ?? ""} />
+        <Greeting name={me?.name ?? ""} />
         {data && data.walletCount > 0 ? (
           <View style={styles.netWorth}>
             <AppText size={13} tone="heroMuted">
@@ -75,10 +84,11 @@ export default function HomeScreen() {
             </AppText>
           </View>
         ) : null}
-        {data && hasDebts ? (
+        {/* Pil pinjaman hanya kalau ada dompet aktif (web: di bawah kekayaan bersih). */}
+        {data && data.walletCount > 0 && hasDebts ? (
           <Pressable
             accessibilityRole="link"
-            onPress={() => void Linking.openURL(`${API_URL}/debts`)}
+            onPress={() => router.push("/debts")}
             style={[styles.debtPill, { borderColor: theme.heroMuted40 }]}
           >
             <View style={styles.debtText}>
@@ -108,7 +118,7 @@ export default function HomeScreen() {
           ) : (
             <>
               {/* Banner konfirmasi email: bukan untuk akun demo (BR-33), sama dengan web. */}
-              {user && !user.emailVerified && profile.data && !profile.data.demo ? <EmailBanner email={user.email} /> : null}
+              {me && !me.emailVerified && profile.data && !profile.data.demo ? <EmailBanner email={me.email} /> : null}
 
               {data!.walletCount === 0 ? (
                 <Pressable
@@ -179,7 +189,7 @@ export default function HomeScreen() {
               ) : null}
 
               <View style={styles.section}>
-                <SectionHeader title="Transaksi terakhir" link="Lihat semua" onLink={() => router.navigate("/transactions")} />
+                <SectionHeader title="Transaksi terakhir" link="Lihat semua" onLink={() => openTransactions()} />
                 {data!.recentTransactions.length > 0 ? (
                   <InsetCard>
                     {data!.recentTransactions.map((transaction) => (

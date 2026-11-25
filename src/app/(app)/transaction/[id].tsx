@@ -1,29 +1,42 @@
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { StyleSheet, View } from "react-native";
-import { TransactionAmount } from "@/components/finance";
+import { describeTransaction, TransactionAmount, transactionIcon } from "@/components/finance";
 import { Sheet, type SheetControls } from "@/components/sheet";
 import { useToast } from "@/components/toast";
 import { TransactionForm } from "@/components/transaction-form";
-import { AppText, Button, ErrorState, IconChip, Loading } from "@/components/ui";
+import { AppText, Button, ErrorState, IconChip, Loading, TextLink } from "@/components/ui";
 import { ApiError, type Transaction } from "@/lib/api";
 import { groupLabel } from "@/lib/date";
 import { useDeleteTransaction, useHome, useRestoreTransaction, useSaveTransaction, useTransaction } from "@/lib/queries";
 import { RADIUS, useTheme } from "@/lib/theme";
 
 // Edit transaksi (US-09) + hapus tanpa dialog, bisa dibatalkan lewat toast "Batal" (BR-10).
-// Koreksi saldo tidak bisa diubah lewat form (hanya dihapus), sama dengan web.
+// Transaksi pinjaman (BR-13) dan koreksi saldo tidak bisa diubah lewat form (hanya dihapus), sama dengan web.
+
+const isDebtType = (type: Transaction["fromWalletType"]) => type === "receivable" || type === "payable";
+
+/** Dompet pinjaman yang disentuh transaksi ini (null = transaksi biasa). */
+function debtWalletOf(transaction: Transaction): number | null {
+  if (isDebtType(transaction.toWalletType)) return transaction.toWalletId;
+  if (isDebtType(transaction.fromWalletType)) return transaction.fromWalletId;
+  return null;
+}
+
 export default function TransactionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const transactionId = Number(id);
   const query = useTransaction(transactionId);
+  const debtWalletId = query.data ? debtWalletOf(query.data) : null;
   const adjustment = query.data?.type === "adjustment";
   return (
-    <Sheet title={adjustment ? "Koreksi saldo" : "Edit transaksi"}>
+    <Sheet title={debtWalletId ? "Transaksi pinjaman" : adjustment ? "Koreksi saldo" : "Edit transaksi"}>
       {(controls) =>
         query.isPending ? (
           <Loading />
         ) : query.isError ? (
           <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
+        ) : debtWalletId ? (
+          <LoanDetail transaction={query.data} debtWalletId={debtWalletId} controls={controls} />
         ) : adjustment ? (
           <AdjustmentDetail transaction={query.data} controls={controls} />
         ) : (
@@ -133,8 +146,43 @@ function AdjustmentDetail({ transaction, controls }: { transaction: Transaction;
   );
 }
 
+/** Transaksi pinjaman: hanya ditampilkan + bisa dihapus; ubah lewat halaman pinjaman (web: "Buka pinjaman"). */
+function LoanDetail({ transaction, debtWalletId, controls }: { transaction: Transaction; debtWalletId: number; controls: SheetControls }) {
+  const theme = useTheme();
+  const remove = useDelete(transaction, controls);
+  const today = useHome().data?.today;
+  const { title, subtitle } = describeTransaction(transaction);
+  const icon = transactionIcon(transaction);
+  return (
+    <>
+      <View style={[styles.summaryCard, { backgroundColor: theme.muted }]}>
+        <IconChip name={icon.name} color={theme.transfer} background={theme.muted} />
+        <View style={styles.flex}>
+          <AppText weight={500} numberOfLines={1}>
+            {title}
+          </AppText>
+          <AppText size={13} tone="mutedForeground">
+            {subtitle} · {groupLabel(transaction.transactionDate, today)}
+          </AppText>
+        </View>
+        <TransactionAmount type="transfer" amount={transaction.amount} />
+      </View>
+      <View style={styles.loanNote}>
+        <AppText size={13} tone="mutedForeground">
+          Catatan pinjaman tidak bisa diedit. Kalau salah, hapus lalu catat ulang dari halaman pinjaman.
+        </AppText>
+        {/* Kembali ke detail pinjaman kalau dibuka dari sana, selain itu ganti sheet ini dengan detailnya. */}
+        <TextLink label="Buka pinjaman" onPress={() => router.dismissTo(`/debt/${debtWalletId}`)} style={styles.selfStart} />
+      </View>
+      <DeleteButton onPress={remove.run} pending={remove.pending} />
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
+  loanNote: { gap: 4 },
+  selfStart: { alignSelf: "flex-start", paddingHorizontal: 0 },
   danger: { borderTopWidth: 1, paddingTop: 20 },
   summaryCard: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: RADIUS.xl, padding: 16 },
 });

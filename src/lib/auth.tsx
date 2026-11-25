@@ -3,6 +3,7 @@ import * as SecureStore from "expo-secure-store";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Platform } from "react-native";
 import { ApiError, rawRequest, request, setApiToken, setUnauthorizedHandler, type User } from "@/lib/api";
+import { normalizeEmail } from "@/lib/validation";
 
 // Sesi app: token sesi Better Auth (plugin bearer di server) disimpan terenkripsi di Android Keystore
 // lewat SecureStore. Token = sesi biasa: muncul di Profil → Perangkat di web dan bisa dikeluarkan dari sana.
@@ -36,6 +37,9 @@ type AuthContextValue = {
   replaceToken: (token: string) => Promise<void>;
   /** Setelah akun dihapus: buang token di HP ini (sesi di server sudah ikut terhapus). */
   forgetSession: () => Promise<void>;
+  /** Baru daftar: Beranda langsung membuka "Siapkan dompet pertama" (web: redirect ke /wallets/new). */
+  newAccount: boolean;
+  clearNewAccount: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -59,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<User | null>(null);
+  const [newAccount, setNewAccount] = useState(false);
 
   const clearLocal = useCallback(async () => {
     setApiToken(null);
@@ -116,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // "Ingat saya" (BR-42): sesi 7 hari dan diperpanjang selama dipakai; dimatikan = sesi pendek (maks. 24 jam).
       const { headers } = await rawRequest("/api/auth/sign-in/email", {
         method: "POST",
-        body: { email: email.trim(), password, rememberMe },
+        body: { email: normalizeEmail(email), password, rememberMe },
       });
       await acceptSession(headers);
     },
@@ -127,8 +132,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (name: string, email: string, password: string) => {
       const { headers } = await rawRequest("/api/auth/sign-up/email", {
         method: "POST",
-        body: { name: name.trim(), email: email.trim(), password },
+        body: { name: name.trim(), email: normalizeEmail(email), password },
       });
+      setNewAccount(true);
       await acceptSession(headers);
     },
     [acceptSession],
@@ -151,13 +157,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOutEverywhere = useCallback(async () => {
-    await rawRequest("/api/auth/revoke-sessions", { method: "POST", body: {} }).catch(() => {});
+    // Sama dengan web (US-02): tautan Telegram ikut diputus, lalu semua sesi dicabut.
+    await rawRequest("/api/v1/sessions/revoke-all", { method: "POST", body: {} }).catch(() => {});
     await clearLocal();
   }, [clearLocal]);
 
+  const clearNewAccount = useCallback(() => setNewAccount(false), []);
+
   const value = useMemo(
-    () => ({ status, user, signIn, signUp, signOut, signOutEverywhere, signInDemo, replaceToken, forgetSession: clearLocal }),
-    [status, user, signIn, signUp, signOut, signOutEverywhere, signInDemo, replaceToken, clearLocal],
+    () => ({
+      status,
+      user,
+      signIn,
+      signUp,
+      signOut,
+      signOutEverywhere,
+      signInDemo,
+      replaceToken,
+      forgetSession: clearLocal,
+      newAccount,
+      clearNewAccount,
+    }),
+    [status, user, signIn, signUp, signOut, signOutEverywhere, signInDemo, replaceToken, clearLocal, newAccount, clearNewAccount],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

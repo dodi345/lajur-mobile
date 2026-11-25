@@ -1,7 +1,7 @@
-import { router, useLocalSearchParams } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { WALLET_TYPE_LABELS } from "@/components/finance";
+import { openTransactions, WALLET_TYPE_LABELS } from "@/components/finance";
 import { Icon } from "@/components/icon";
 import { Page } from "@/components/screen";
 import { useToast } from "@/components/toast";
@@ -39,6 +39,8 @@ export default function WalletScreen() {
   const archived = Boolean(wallet?.archivedAt);
   // Dompet utang/piutang dikelola di halaman pinjaman (sisa pinjaman hanya berubah lewat pinjam/bayar, BR-16).
   const debt = wallet?.type === "receivable" || wallet?.type === "payable";
+  // Web: dompet utang/piutang dialihkan ke halaman pinjamannya.
+  if (wallet && debt) return <Redirect href={`/debt/${wallet.id}`} />;
 
   return (
     <Page title={wallet?.name ?? "Dompet"} back={() => router.back()} refreshing={query.isRefetching} onRefresh={() => void query.refetch()}>
@@ -79,7 +81,7 @@ export default function WalletScreen() {
 
           <TextLink
             label={`Lihat transaksi ${wallet!.name}`}
-            onPress={() => router.navigate({ pathname: "/transactions", params: { walletId: String(wallet!.id) } })}
+            onPress={() => openTransactions({ walletId: wallet!.id })}
             style={styles.selfStart}
           />
 

@@ -21,6 +21,23 @@ export const WALLET_TYPE_LABELS: Record<WalletType, string> = {
   payable: "Utang",
 };
 
+/**
+ * Buka tab Transaksi dengan filter baru (= tautan /transactions?… web yang mengganti seluruh query):
+ * filter yang tidak disebut ikut kosong (bulan ini, semua dompet/kategori/jenis). `v` membuat setiap
+ * pembukaan terbaca sebagai perubahan walau filternya sama.
+ */
+export function openTransactions(filter: { month?: string; walletId?: number; categoryId?: number } = {}) {
+  router.navigate({
+    pathname: "/transactions",
+    params: {
+      month: filter.month ?? "",
+      walletId: filter.walletId ? String(filter.walletId) : "",
+      categoryId: filter.categoryId ? String(filter.categoryId) : "",
+      v: String(Date.now()),
+    },
+  });
+}
+
 /** Ikon kategori dari kolom categories.icon (nama Boxicons); kosong/tidak dikenal → Tag. */
 export function categoryIcon(name: string | null | undefined): BoxIconName {
   return name && name in BOXICONS ? (name as BoxIconName) : "Tag";
@@ -35,6 +52,7 @@ export function TransactionAmount({
   incoming,
   size = 16,
   lineHeight,
+  weight = 600,
 }: {
   type: TransactionType;
   amount: number;
@@ -42,6 +60,8 @@ export function TransactionAmount({
   incoming?: boolean;
   size?: number;
   lineHeight?: number;
+  /** Sampah: 400 (web: font-normal). */
+  weight?: 400 | 600;
 }) {
   let sign = "";
   let tone: Tone = "transfer";
@@ -50,42 +70,74 @@ export function TransactionAmount({
   else if (type === "income") [sign, tone] = ["+", "income"];
   else if (type === "adjustment") sign = incoming ? "+" : "−";
   return (
-    <AppText size={size} weight={600} tone={tone} lineHeight={lineHeight} numeric numberOfLines={1}>
+    <AppText size={size} weight={weight} tone={tone} lineHeight={lineHeight} numeric numberOfLines={1}>
       {sign}
       {formatRupiah(Math.abs(amount))}
     </AppText>
   );
 }
 
-function rowParts(transaction: Transaction): { icon: BoxIconName; neutral: boolean; title: string; subtitle: string } {
-  const wallet = transaction.fromWalletName ?? transaction.toWalletName ?? "";
-  if (isDebtWallet(transaction.fromWalletType) || isDebtWallet(transaction.toWalletType)) {
-    return { icon: "Handshake", neutral: true, title: transaction.note || "Utang & piutang", subtitle: `Utang & piutang · ${wallet}` };
+/**
+ * Label "bahasa manusia" untuk transaksi yang menyentuh dompet pinjaman (describeDebtTransaction web),
+ * mis. "Pinjamkan ke Andi" + "dari BSI". null kalau transaksi tidak menyentuh dompet pinjaman.
+ */
+export function debtLabelOf(t: Transaction): { label: string; wallet: string | null; counterparty: string } | null {
+  const toDebt = isDebtWallet(t.toWalletType) ? t.toWalletType : null;
+  const fromDebt = isDebtWallet(t.fromWalletType) ? t.fromWalletType : null;
+
+  // US-21: pinjaman lama dicatat sebagai adjustment ke/dari dompet pinjaman.
+  if (t.type === "adjustment") {
+    if (toDebt === "receivable" && t.toCounterparty) {
+      return { label: `Pinjaman lama ke ${t.toCounterparty}`, wallet: null, counterparty: t.toCounterparty };
+    }
+    if (fromDebt === "payable" && t.fromCounterparty) {
+      return { label: `Pinjaman lama dari ${t.fromCounterparty}`, wallet: null, counterparty: t.fromCounterparty };
+    }
+    return null;
   }
-  if (transaction.type === "transfer") {
-    return {
-      icon: "ArrowLeftRight",
-      neutral: true,
-      title: transaction.note || "Transfer",
-      subtitle: `Transfer · ${transaction.fromWalletName} → ${transaction.toWalletName}`,
-    };
+
+  if (t.type !== "transfer") return null;
+  if (toDebt && t.toCounterparty) {
+    const name = t.toCounterparty;
+    return { label: toDebt === "receivable" ? `Pinjamkan ke ${name}` : `Bayar ke ${name}`, wallet: `dari ${t.fromWalletName}`, counterparty: name };
   }
-  if (transaction.type === "adjustment") {
-    return { icon: "SliderAlt", neutral: true, title: transaction.note || "Koreksi saldo", subtitle: `Koreksi saldo · ${wallet}` };
+  if (fromDebt && t.fromCounterparty) {
+    const name = t.fromCounterparty;
+    return { label: fromDebt === "receivable" ? `${name} membayar` : `Pinjam dari ${name}`, wallet: `ke ${t.toWalletName}`, counterparty: name };
   }
-  const category = transaction.categoryName ?? "";
-  return {
-    icon: categoryIcon(transaction.categoryIcon),
-    neutral: false,
-    title: transaction.note || category,
-    subtitle: `${category} · ${wallet}`,
-  };
+  return null;
+}
+
+/** Judul & keterangan baris (describeTransaction web): catatan atau nama kategori, lalu kategori · dompet. */
+export function describeTransaction(t: Transaction): { title: string; subtitle: string } {
+  const debt = debtLabelOf(t);
+  if (debt) {
+    const where = debt.wallet ? ` · ${debt.wallet}` : "";
+    return t.note ? { title: t.note, subtitle: `${debt.label}${where}` } : { title: debt.label, subtitle: `Utang & piutang${where}` };
+  }
+  if (t.type === "transfer") {
+    return { title: t.note || "Transfer", subtitle: `Transfer · ${t.fromWalletName} → ${t.toWalletName}` };
+  }
+  if (t.type === "adjustment") {
+    return { title: t.note || "Koreksi saldo", subtitle: `Koreksi saldo · ${t.toWalletName ?? t.fromWalletName}` };
+  }
+  const wallet = t.type === "income" ? t.toWalletName : t.fromWalletName;
+  return { title: t.note || t.categoryName || "", subtitle: `${t.categoryName} · ${wallet}` };
+}
+
+/** Ikon transaksi (TransactionIcon web): pinjaman Handshake, transfer ArrowLeftRight, koreksi SliderAlt (warna transfer). */
+export function transactionIcon(t: Transaction): { name: BoxIconName; neutral: boolean } {
+  if (t.type === "transfer" || t.type === "adjustment") {
+    return { name: debtLabelOf(t) ? "Handshake" : t.type === "transfer" ? "ArrowLeftRight" : "SliderAlt", neutral: true };
+  }
+  return { name: categoryIcon(t.categoryIcon), neutral: false };
 }
 
 /** Baris transaksi (min 64px) di dalam kartu muted; ketuk → sheet edit. */
 export function TransactionRow({ transaction }: { transaction: Transaction }) {
   const theme = useTheme();
-  const { icon, neutral, title, subtitle } = rowParts(transaction);
+  const { title, subtitle } = describeTransaction(transaction);
+  const { name: icon, neutral } = transactionIcon(transaction);
   return (
     <Pressable
       accessibilityRole="button"
@@ -232,7 +284,7 @@ export function CategoryBreakdown({ items, month }: { items: CategoryShare[]; mo
             accessibilityRole="button"
             accessibilityLabel={`${item.categoryName}, ${formatRupiah(item.total)}, ${formatPercent(item.share)}`}
             onPress={() =>
-              router.navigate({ pathname: "/transactions", params: { month, categoryId: String(item.categoryId) } })
+              openTransactions({ month, categoryId: item.categoryId })
             }
             style={({ pressed }) => [styles.breakdownRow, pressed && { backgroundColor: theme.muted }]}
           >

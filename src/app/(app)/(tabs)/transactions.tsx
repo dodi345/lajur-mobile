@@ -8,7 +8,7 @@ import { AppText, EmptyState, ErrorState, InsetCard, Loading } from "@/component
 import type { Transaction, TransactionType } from "@/lib/api";
 import { monthLabel } from "@/lib/date";
 import { formatRupiah } from "@/lib/money";
-import { useCategories, useTransactions, useWallets } from "@/lib/queries";
+import { useManagedCategories, useTransactions, useWallets } from "@/lib/queries";
 import { font, RADIUS, TOUCH, useTheme } from "@/lib/theme";
 
 // Transaksi = app/(app)/transactions/page.tsx web: navigasi bulan, filter (dompet, kategori, jenis),
@@ -23,26 +23,28 @@ const TYPE_OPTIONS: PickerOption<TransactionType | null>[] = [
   { value: "adjustment", label: "Koreksi saldo" },
 ];
 
-type Params = { month?: string; walletId?: string; categoryId?: string };
+type Params = { month?: string; walletId?: string; categoryId?: string; v?: string };
 const numberParam = (value: string | undefined) => (value && /^\d+$/.test(value) ? Number(value) : null);
 
 export default function TransactionsScreen() {
   const params = useLocalSearchParams<Params>();
-  const [month, setMonth] = useState<string | undefined>(params.month);
+  const [month, setMonth] = useState<string | undefined>(params.month || undefined);
   const [walletId, setWalletId] = useState<number | null>(numberParam(params.walletId));
   const [categoryId, setCategoryId] = useState<number | null>(numberParam(params.categoryId));
   const [type, setType] = useState<TransactionType | null>(null);
   const [picker, setPicker] = useState<"wallet" | "category" | "type" | null>(null);
 
-  // Dibuka lagi dari Ringkasan / detail dompet dengan filter baru: filter ikut berganti
+  // Dibuka lagi lewat tautan (openTransactions: Beranda, Ringkasan, detail dompet, nav bawah): seluruh filter
+  // diganti isi tautan, yang tidak disebut kosong lagi, sama dengan tautan /transactions?… web
   // (pola "sesuaikan state saat props berubah", tanpa efek).
-  const paramsKey = `${params.month ?? ""}|${params.walletId ?? ""}|${params.categoryId ?? ""}`;
+  const paramsKey = `${params.v ?? ""}|${params.month ?? ""}|${params.walletId ?? ""}|${params.categoryId ?? ""}`;
   const [seenParams, setSeenParams] = useState(paramsKey);
   if (paramsKey !== seenParams) {
     setSeenParams(paramsKey);
-    if (params.month) setMonth(params.month);
-    if (params.walletId !== undefined) setWalletId(numberParam(params.walletId));
-    if (params.categoryId !== undefined) setCategoryId(numberParam(params.categoryId));
+    setMonth(params.month || undefined);
+    setWalletId(numberParam(params.walletId));
+    setCategoryId(numberParam(params.categoryId));
+    setType(null);
   }
 
   const query = useTransactions({
@@ -51,20 +53,22 @@ export default function TransactionsScreen() {
     categoryId: categoryId ?? undefined,
     type: type ?? undefined,
   });
+  // Filter = web: dompet aktif + diarsipkan; kategori aktif urut dibuat (bukan urut paling sering dipakai).
   const wallets = useWallets();
-  const expenseCategories = useCategories("expense");
-  const incomeCategories = useCategories("income");
+  const archivedWallets = useWallets(true);
+  const expenseCategories = useManagedCategories("expense");
+  const incomeCategories = useManagedCategories("income");
   const data = query.data;
   const shownMonth = data?.month ?? month;
 
   const walletOptions: PickerOption<number | null>[] = [
     { value: null, label: "Semua dompet" },
-    ...(wallets.data ?? []).map((wallet) => ({ value: wallet.id, label: wallet.name })),
+    ...[...(wallets.data ?? []), ...(archivedWallets.data ?? [])].map((wallet) => ({ value: wallet.id, label: wallet.name })),
   ];
   const categoryOptions: PickerOption<number | null>[] = [
     { value: null, label: "Semua kategori" },
-    ...(expenseCategories.data ?? []).map((category) => ({ value: category.id, label: category.name })),
-    ...(incomeCategories.data ?? []).map((category) => ({ value: category.id, label: `${category.name} (Pemasukan)` })),
+    ...(expenseCategories.data?.active ?? []).map((category) => ({ value: category.id, label: category.name })),
+    ...(incomeCategories.data?.active ?? []).map((category) => ({ value: category.id, label: `${category.name} (Pemasukan)` })),
   ];
   const label = <T,>(options: PickerOption<T>[], value: T) => options.find((option) => option.value === value)?.label ?? options[0]!.label;
 

@@ -6,7 +6,7 @@ import { OptionPicker } from "@/components/picker";
 import { Page } from "@/components/screen";
 import { useToast } from "@/components/toast";
 import { AppText, Button, FormField, FormMessage, IconChip, Input, InsetCard } from "@/components/ui";
-import { API_URL, ApiError } from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { shortDate } from "@/lib/date";
 import { exportTransactionsCsv } from "@/lib/export";
@@ -39,7 +39,6 @@ const THEMES: { value: ThemeChoice; label: string; icon: BoxIconName }[] = [
   { value: "system", label: "Ikuti sistem", icon: "Desktop" },
 ];
 
-const openWeb = (path: string) => void Linking.openURL(`${API_URL}${path}`);
 
 /** Inisial dari dua kata pertama, huruf besar (sama dengan web). */
 function initials(name: string) {
@@ -100,24 +99,41 @@ export default function ProfileScreen() {
 
           <Group title="Akun">
             <InlineEditRow label="Nama" value={profile.name} field="name" initial={profile.name} />
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push("/profile/email")}
-              style={({ pressed }) => [styles.valueRow, pressed && { backgroundColor: theme.pressedRow }]}
-            >
-              <View style={styles.flex}>
-                <AppText size={13} tone="mutedForeground">
-                  Email
-                </AppText>
-                <AppText weight={500} numberOfLines={1}>
-                  {profile.email}
-                </AppText>
-                <AppText size={12} tone={profile.emailVerified ? "income" : "warning"}>
-                  {profile.emailVerified ? "Terkonfirmasi" : "Belum dikonfirmasi"}
-                </AppText>
+            {demo ? (
+              // Akun demo: email tidak bisa diubah, baris tidak bisa diketuk (sama dengan web).
+              <View style={styles.valueRow}>
+                <View style={styles.flex}>
+                  <AppText size={13} tone="mutedForeground">
+                    Email
+                  </AppText>
+                  <AppText weight={500} numberOfLines={1}>
+                    {profile.email}
+                  </AppText>
+                  <AppText size={12} tone="mutedForeground">
+                    Tidak bisa diubah di akun demo
+                  </AppText>
+                </View>
               </View>
-              <Icon name="ChevronRight" size={20} color={theme.mutedForeground} />
-            </Pressable>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push("/profile/email")}
+                style={({ pressed }) => [styles.valueRow, pressed && { backgroundColor: theme.pressedRow }]}
+              >
+                <View style={styles.flex}>
+                  <AppText size={13} tone="mutedForeground">
+                    Email
+                  </AppText>
+                  <AppText weight={500} numberOfLines={1}>
+                    {profile.email}
+                  </AppText>
+                  <AppText size={12} tone={profile.emailVerified ? "income" : "warning"}>
+                    {profile.emailVerified ? "Terkonfirmasi" : "Belum dikonfirmasi"}
+                  </AppText>
+                </View>
+                <Icon name="ChevronRight" size={20} color={theme.mutedForeground} />
+              </Pressable>
+            )}
             <InlineEditRow
               label="Zona waktu"
               value={TIMEZONES.find((zone) => zone.value === profile.timezone)?.label ?? profile.timezone}
@@ -154,10 +170,10 @@ export default function ProfileScreen() {
               icon="Handshake"
               label="Utang & Piutang"
               detail={data.counts.openDebts > 0 ? `${data.counts.openDebts} belum lunas` : undefined}
-              onPress={() => openWeb("/debts")}
+              onPress={() => router.push("/debts")}
             />
-            <MenuLink icon="Tag" label="Kategori" onPress={() => openWeb("/categories")} />
-            <MenuLink icon="Trash" label="Sampah" detail={data.counts.trash > 0 ? String(data.counts.trash) : undefined} onPress={() => openWeb("/trash")} />
+            <MenuLink icon="Tag" label="Kategori" onPress={() => router.push("/categories")} />
+            <MenuLink icon="Trash" label="Sampah" detail={data.counts.trash > 0 ? String(data.counts.trash) : undefined} onPress={() => router.push("/trash")} />
             <MenuLink
               icon="ArrowToBottom"
               label={exporting ? "Menyiapkan file…" : "Ekspor CSV"}

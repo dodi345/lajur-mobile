@@ -4,7 +4,9 @@ import { StyleSheet, View } from "react-native";
 import { AuthShell, Checkbox } from "@/components/auth-shell";
 import { AppText, Button, FormField, FormMessage, Input, TextLink } from "@/components/ui";
 import { authErrorMessage, useAuth } from "@/lib/auth";
+import { useSignUpStatus } from "@/lib/queries";
 import { useTheme } from "@/lib/theme";
+import { loginErrors } from "@/lib/validation";
 
 // Masuk = /login web (components/auth/auth-forms.tsx).
 export default function LoginScreen() {
@@ -16,15 +18,17 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<ReturnType<typeof loginErrors>>({});
   const [busy, setBusy] = useState(false);
+  // Tautan Daftar disembunyikan saat pendaftaran ditutup (DISABLE_SIGNUP), sama dengan web.
+  const signUpOpen = useSignUpStatus().data !== false;
 
   const submit = async () => {
-    if (!email.trim() || !password) {
-      setError("Isi email dan password.");
-      return;
-    }
-    setBusy(true);
+    const errors = loginErrors({ email, password });
+    setFieldErrors(errors);
     setError(null);
+    if (Object.keys(errors).length > 0) return;
+    setBusy(true);
     try {
       await signIn(email, password, remember);
     } catch (caught) {
@@ -38,17 +42,19 @@ export default function LoginScreen() {
       title="Masuk"
       subtitle="Lanjutkan mencatat keuanganmu."
       footer={
-        <View style={styles.footer}>
-          <AppText size={14} lineHeight={20} tone="mutedForeground">
-            Belum punya akun?
-          </AppText>
-          <TextLink label="Daftar" onPress={() => router.push("/register")} />
-        </View>
+        signUpOpen ? (
+          <View style={styles.footer}>
+            <AppText size={14} lineHeight={20} tone="mutedForeground">
+              Belum punya akun?
+            </AppText>
+            <TextLink label="Daftar" onPress={() => router.push("/register")} />
+          </View>
+        ) : null
       }
     >
       <View style={styles.form}>
         {error ? <FormMessage message={error} /> : null}
-        <FormField label="Email">
+        <FormField label="Email" error={fieldErrors.email}>
           <Input
             value={email}
             onChangeText={setEmail}
@@ -57,10 +63,11 @@ export default function LoginScreen() {
             autoComplete="email"
             keyboardType="email-address"
             textContentType="emailAddress"
+            invalid={Boolean(fieldErrors.email)}
             accessibilityLabel="Email"
           />
         </FormField>
-        <FormField label="Password">
+        <FormField label="Password" error={fieldErrors.password}>
           <Input
             value={password}
             onChangeText={setPassword}
@@ -68,6 +75,7 @@ export default function LoginScreen() {
             secureTextEntry
             autoComplete="current-password"
             textContentType="password"
+            invalid={Boolean(fieldErrors.password)}
             accessibilityLabel="Password"
             onSubmitEditing={() => void submit()}
           />

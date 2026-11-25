@@ -30,12 +30,9 @@ export function Glass({
   }
   return (
     <View style={[styles.clip, border, style]}>
-      <BlurView
-        intensity={60}
-        tint={theme.dark ? "dark" : "light"}
-        experimentalBlurMethod="dimezisBlurView"
-        style={StyleSheet.absoluteFill}
-      />
+      {/* Android: blur Dimezis butuh BlurTargetView (expo-blur 58); tanpa target, blur dimatikan dan yang tampil
+          hanya latar 85% di bawah ini. */}
+      <BlurView intensity={60} tint={theme.dark ? "dark" : "light"} blurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.glassBg }]} />
       {children}
     </View>

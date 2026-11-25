@@ -1,16 +1,14 @@
-import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { useState } from "react";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { Icon } from "@/components/icon";
 import { Sheet } from "@/components/sheet";
 import { useToast } from "@/components/toast";
-import { AppText, Button, ChoiceChip, ErrorState, FormField, FormMessage, Input, Loading, MoneyInput } from "@/components/ui";
+import { AppText, Button, ChoiceChip, DateField, ErrorState, FormField, FormMessage, Input, Loading, MoneyInput } from "@/components/ui";
 import { WalletLogo } from "@/components/wallet-logo";
 import { ApiError } from "@/lib/api";
-import { displayDate } from "@/lib/date";
 import { formatAmountInput, formatRupiah, parseAmountInput } from "@/lib/money";
 import { useCreateGoal, useSavingsWallets } from "@/lib/queries";
-import { RADIUS, TALL, useTheme } from "@/lib/theme";
+import { useTheme } from "@/lib/theme";
 
 // Target baru (US-13) = components/goals/goal-form.tsx web: nama, nominal, tenggat opsional, dompet tabungan
 // (pilih yang ada atau buat baru). BR-08: hanya dompet Tabungan; yang sudah dipakai target aktif tidak bisa dipilih.
@@ -32,22 +30,6 @@ export default function NewGoalScreen() {
   const today = options.data?.today;
   // Bawaan sama dengan web: dompet tabungan pertama yang belum dipakai, kalau tidak ada "buat baru".
   const selected = wallet ?? wallets.find((item) => !item.usedBy)?.id ?? NEW_WALLET;
-
-  const pickDeadline = () => {
-    if (Platform.OS !== "android") return;
-    const [ty, tm, td] = (today ?? "2026-01-01").split("-").map(Number);
-    const [y, m, d] = (deadline ?? today ?? "2026-01-01").split("-").map(Number);
-    DateTimePickerAndroid.open({
-      value: new Date(y ?? 2026, (m ?? 1) - 1, d ?? 1),
-      mode: "date",
-      minimumDate: new Date(ty ?? 2026, (tm ?? 1) - 1, td ?? 1),
-      onChange: (event, value) => {
-        if (event.type !== "set" || !value) return;
-        const pad = (n: number) => String(n).padStart(2, "0");
-        setDeadline(`${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`);
-      },
-    });
-  };
 
   const submit = (close: () => void) =>
     create.mutate(
@@ -93,23 +75,14 @@ export default function NewGoalScreen() {
             </FormField>
 
             <FormField label="Tenggat (opsional)" error={fieldErrors.deadline}>
-              <View
-                style={[
-                  styles.dateField,
-                  { backgroundColor: theme.inputBg, borderColor: fieldErrors.deadline ? theme.destructive : theme.border },
-                ]}
-              >
-                <Pressable accessibilityRole="button" accessibilityLabel="Tenggat (opsional)" onPress={pickDeadline} style={styles.dateValue}>
-                  <AppText size={16} lineHeight={22} tone={deadline ? "foreground" : "mutedForeground"} numeric>
-                    {deadline ? displayDate(deadline) : "dd/mm/yyyy"}
-                  </AppText>
-                </Pressable>
-                {deadline ? (
-                  <Pressable accessibilityRole="button" accessibilityLabel="Hapus tenggat" onPress={() => setDeadline(null)} style={styles.clear} hitSlop={4}>
-                    <Icon name="X" size={20} color={theme.mutedForeground} />
-                  </Pressable>
-                ) : null}
-              </View>
+              <DateField
+                value={deadline}
+                onChange={setDeadline}
+                min={today}
+                clearable
+                invalid={Boolean(fieldErrors.deadline)}
+                accessibilityLabel="Tenggat (opsional)"
+              />
             </FormField>
 
             <View style={styles.wallets}>
@@ -177,7 +150,4 @@ const styles = StyleSheet.create({
   option: { minHeight: 56, justifyContent: "flex-start", gap: 12, paddingHorizontal: 12, paddingVertical: 8 },
   used: { opacity: 0.6 },
   plus: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  dateField: { height: TALL, flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: RADIUS.xl },
-  dateValue: { flex: 1, height: "100%", justifyContent: "center", paddingHorizontal: 16 },
-  clear: { width: 44, height: "100%", alignItems: "center", justifyContent: "center" },
 });

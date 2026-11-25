@@ -13,6 +13,7 @@ import {
   type NativeSyntheticEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { openTransactions } from "@/components/finance";
 import { Glass } from "@/components/glass";
 import { Icon, type BoxIconName } from "@/components/icon";
 import { AppText } from "@/components/ui";
@@ -160,7 +161,10 @@ export function BottomNav({ state, navigateToTab }: BottomTabBarProps) {
         accessibilityState={{ selected: active }}
         accessibilityLabel={tab.label}
         onPress={() => {
-          if (!active) navigateToTab(route.key);
+          if (active) return;
+          // Web: tautan nav "Transaksi" = /transactions tanpa query, jadi filter kembali kosong.
+          if (route.name === "transactions") openTransactions();
+          else navigateToTab(route.key);
         }}
         style={styles.tab}
       >

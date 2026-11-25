@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { WALLET_TYPE_LABELS, WalletRow } from "@/components/finance";
 import { Icon } from "@/components/icon";
 import { Page } from "@/components/screen";
-import { AppText, Button, ErrorState, Loading } from "@/components/ui";
+import { AppText, Button, ErrorState, Loading, TextLink } from "@/components/ui";
 import { findBrand } from "@/components/wallet-logo";
 import type { Wallet } from "@/lib/api";
 import { formatRupiah } from "@/lib/money";
@@ -35,7 +35,11 @@ export default function WalletsScreen() {
 
   const active = wallets.data ?? [];
   const archivedList = archived.data ?? [];
+  const searching = query.trim() !== "";
   const filtered = active.filter((wallet) => matches(wallet, query));
+  const archivedMatches = archivedList.filter((wallet) => matches(wallet, query));
+  // Saat mencari, semua hasil tampil agar dompet yang dicari tidak tersembunyi di balik "Lihat lainnya" (web).
+  const visible = searching ? filtered : filtered.slice(0, limit);
 
   return (
     <Page
@@ -91,17 +95,26 @@ export default function WalletsScreen() {
             </View>
           ) : null}
 
-          <View>
-            {filtered.slice(0, limit).map((wallet) => (
-              <WalletRow key={wallet.id} wallet={wallet} />
-            ))}
-            {filtered.length === 0 && query ? (
-              <AppText size={14} lineHeight={20} tone="mutedForeground" style={styles.noResult}>
-                Tidak ada dompet yang cocok.
+          {active.length === 0 ? (
+            <View style={styles.empty}>
+              <AppText size={14} lineHeight={20} tone="mutedForeground">
+                Belum ada dompet aktif.
               </AppText>
-            ) : null}
-          </View>
-          {filtered.length > limit ? (
+              <TextLink label="Tambah dompet" onPress={() => router.push("/wallet/new")} />
+            </View>
+          ) : visible.length > 0 ? (
+            <View>
+              {visible.map((wallet) => (
+                <WalletRow key={wallet.id} wallet={wallet} />
+              ))}
+            </View>
+          ) : null}
+          {searching && filtered.length === 0 && archivedMatches.length === 0 ? (
+            <AppText size={14} lineHeight={20} tone="mutedForeground" accessibilityLiveRegion="polite">
+              Tidak ada dompet yang cocok dengan “{query.trim()}”.
+            </AppText>
+          ) : null}
+          {filtered.length > visible.length ? (
             <Pressable
               accessibilityRole="button"
               onPress={() => setLimit((value) => value + PAGE_SIZE)}
@@ -114,7 +127,21 @@ export default function WalletsScreen() {
             </Pressable>
           ) : null}
 
-          {archivedList.length > 0 ? (
+          {searching ? (
+            // Hasil pencarian di dompet arsip langsung terbuka, tidak perlu membuka lipatan (web).
+            archivedMatches.length > 0 ? (
+              <View style={styles.archivedResults}>
+                <AppText size={13} weight={500} tone="mutedForeground" style={styles.archivedTitle} accessibilityRole="header">
+                  Diarsipkan
+                </AppText>
+                {archivedMatches.map((wallet) => (
+                  <View key={wallet.id} style={styles.dimmed}>
+                    <WalletRow wallet={wallet} />
+                  </View>
+                ))}
+              </View>
+            ) : null
+          ) : archivedList.length > 0 ? (
             <View style={[styles.archived, { borderColor: theme.border }]}>
               <Pressable accessibilityRole="button" accessibilityState={{ expanded: archivedOpen }} onPress={() => setArchivedOpen((open) => !open)} style={styles.archivedHead}>
                 <AppText size={14} weight={500} lineHeight={20}>
@@ -152,7 +179,9 @@ const styles = StyleSheet.create({
   searchIcon: { position: "absolute", left: 12, zIndex: 1 },
   searchInput: { height: TOUCH, borderWidth: 1, borderRadius: RADIUS.xl, paddingLeft: 40, paddingRight: 44 },
   clear: { position: "absolute", right: 0, width: TOUCH, height: TOUCH, alignItems: "center", justifyContent: "center" },
-  noResult: { paddingHorizontal: 8, paddingVertical: 8 },
+  empty: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 4 },
+  archivedResults: { gap: 4 },
+  archivedTitle: { paddingHorizontal: 8 },
   more: { minHeight: TOUCH, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, borderWidth: 1, borderRadius: RADIUS.xl },
   archived: { borderWidth: 1, borderRadius: RADIUS.xl },
   archivedHead: { minHeight: TOUCH, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16 },

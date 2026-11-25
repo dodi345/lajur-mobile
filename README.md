@@ -9,9 +9,10 @@ Target · Akun), form sebagai bottom sheet, dan toast di atas layar.
 
 Isi: masuk/daftar/lupa password/akun demo, Beranda, Transaksi (filter dompet/kategori/jenis, total per tanggal),
 Dompet (daftar, tambah dengan logo, detail: koreksi saldo, ubah nama, arsip/pulihkan), Ringkasan bulanan, Target
-(daftar, buat, detail, tabung, arsip/pulihkan), Akun (profil, email, password, perangkat, Telegram, tema, kurangi
-efek kaca, ekspor CSV, hapus akun, keluar). Yang belum ada di app (Utang & Piutang, Kategori, Sampah) masih membuka
-halaman yang sama di web Lajur. Tautan di email (konfirmasi email, reset password) memang membuka web.
+(daftar, buat, detail, tabung, arsip/pulihkan), Utang & Piutang (daftar, catat, pinjaman lama, detail, terima/bayar),
+Kategori (tambah, ubah nama, arsip/pulihkan), Sampah, Akun (profil, email, password, perangkat, Telegram, tema,
+kurangi efek kaca, ekspor CSV, hapus akun, keluar). Semua fitur PWA ada di app; hanya tautan di email (konfirmasi
+email, reset password) yang membuka web.
 
 ## Pratinjau cepat di browser
 

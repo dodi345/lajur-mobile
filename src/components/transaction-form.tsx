@@ -1,9 +1,10 @@
+import { router } from "expo-router";
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { useRef, useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance } from "react-native";
 import { categoryIcon } from "@/components/finance";
 import { Icon } from "@/components/icon";
-import { AppText, Button, ChoiceChip, FormField, FormMessage, IconChip, Input, MoneyInput, Segmented } from "@/components/ui";
+import { AppText, Button, ChoiceChip, FormField, FormMessage, IconChip, Input, MoneyInput, Segmented, TextLink } from "@/components/ui";
 import { WalletLogo } from "@/components/wallet-logo";
 import { useToast } from "@/components/toast";
 import { ApiError, type Category, type Transaction, type TransactionInput, type Wallet } from "@/lib/api";
@@ -23,10 +24,10 @@ const TYPE_OPTIONS = [
   { value: "transfer", label: "Transfer" },
 ] as const;
 
-/** Kategori: 5 yang paling sering dipakai + "Lainnya…" (kalau lebih dari 6), sama dengan web. */
+/** Kategori: 5 yang paling sering dipakai + "Lainnya…" (kalau lebih dari 5), sama dengan web. */
 const TOP_CATEGORIES = 5;
 
-function Legend({ children }: { children: string }) {
+export function Legend({ children }: { children: string }) {
   return (
     <AppText size={13} weight={500} tone="mutedForeground" style={styles.legend}>
       {children}
@@ -72,6 +73,7 @@ export function useRecordTransaction() {
 export function TransactionForm({
   initial,
   preset,
+  defaultWalletId,
   today,
   submitting,
   fieldErrors,
@@ -82,6 +84,8 @@ export function TransactionForm({
   initial?: Transaction;
   /** Isian awal form baru, mis. "Tabung ke target" = Transfer ke dompet tabungan target (BR-08). */
   preset?: { type: EntryType; walletId: number | null; toWalletId: number | null };
+  /** Form baru: dompet terakhir dipakai (US-06, dari Beranda); tidak ada/tidak aktif → dompet pertama. */
+  defaultWalletId?: number | null;
   /** Hari ini menurut zona waktu user (dari server). */
   today: string | undefined;
   submitting: boolean;
@@ -91,6 +95,8 @@ export function TransactionForm({
   onSubmit: (input: TransactionInput) => void;
 }) {
   const wallets = useWallets();
+  // Edit: dompet lama yang sudah diarsipkan tetap tampil agar transaksi bisa disimpan ulang (sama dengan web).
+  const archivedWallets = useWallets(true);
   const [type, setType] = useState<EntryType>(initial && initial.type !== "adjustment" ? initial.type : (preset?.type ?? "expense"));
   const [amount, setAmount] = useState(initial ? groupThousands(initial.amount) : "");
   const [walletId, setWalletId] = useState<number | null>(
@@ -106,8 +112,24 @@ export function TransactionForm({
   const [showAll, setShowAll] = useState(false);
   const categories = useCategories(type === "income" ? "income" : "expense");
 
-  const walletList = wallets.data ?? [];
-  const selectedWallet = walletId ?? (initial ? null : (walletList[0]?.id ?? null));
+  const usedIds = initial ? [initial.fromWalletId, initial.toWalletId] : [];
+  const walletList = [
+    ...(wallets.data ?? []),
+    ...(archivedWallets.data ?? []).filter((wallet) => usedIds.includes(wallet.id) && wallet.type !== "receivable" && wallet.type !== "payable"),
+  ];
+  const categoryList = [...(categories.data ?? [])];
+  // Kategori lama yang sudah diarsipkan tetap bisa dipilih saat edit (web: ditambahkan di akhir daftar).
+  if (initial?.categoryId && type === initial.type && !categoryList.some((category) => category.id === initial.categoryId)) {
+    categoryList.push({
+      id: initial.categoryId,
+      name: initial.categoryName ?? "",
+      kind: type === "income" ? "income" : "expense",
+      icon: initial.categoryIcon,
+      usageCount: 0,
+    });
+  }
+  const fallbackWallet = walletList.find((wallet) => wallet.id === defaultWalletId)?.id ?? walletList[0]?.id ?? null;
+  const selectedWallet = walletId ?? (initial ? null : fallbackWallet);
   const selectedDate = date ?? today ?? null;
   const yesterday = today ? shiftDay(today, -1) : null;
 
@@ -146,7 +168,9 @@ export function TransactionForm({
         value={type}
         onChange={(next) => {
           setType(next);
-          setCategoryId(null);
+          // Kategori pengeluaran tidak berlaku untuk pemasukan, dan sebaliknya (BR-11); kembali ke jenis
+          // semula = kategori semula (sama dengan web).
+          setCategoryId(initial && next === initial.type ? initial.categoryId : null);
           setShowAll(false);
         }}
       />
@@ -165,7 +189,7 @@ export function TransactionForm({
         <View>
           <Legend>Kategori</Legend>
           <CategoryGrid
-            categories={categories.data ?? []}
+            categories={categoryList}
             selected={categoryId}
             onSelect={setCategoryId}
             showAll={showAll}
@@ -181,15 +205,18 @@ export function TransactionForm({
 
       <View>
         <Legend>{type === "income" ? "Masuk ke dompet" : "Dari dompet"}</Legend>
-        <WalletPicker wallets={walletList} selected={selectedWallet} onSelect={setWalletId} />
+        <WalletPicker
+          wallets={walletList}
+          selected={selectedWallet}
+          onSelect={(id) => {
+            setWalletId(id);
+            // Dompet tujuan tidak boleh sama dengan dompet asal (web: tujuan dikosongkan).
+            if (id === toWalletId) setToWalletId(null);
+          }}
+        />
         {fieldErrors.walletId ? (
           <AppText size={13} tone="destructive" style={styles.errorBelow}>
             {fieldErrors.walletId}
-          </AppText>
-        ) : null}
-        {wallets.isSuccess && walletList.length === 0 ? (
-          <AppText size={13} tone="mutedForeground">
-            Belum ada dompet. Tambahkan dompet dulu dari Beranda → Dompet.
           </AppText>
         ) : null}
       </View>
@@ -277,7 +304,7 @@ function CategoryGrid({
 }) {
   const theme = useTheme();
   const selectedHidden = selected !== null && categories.findIndex((category) => category.id === selected) >= TOP_CATEGORIES;
-  const collapsed = !showAll && !selectedHidden && categories.length > TOP_CATEGORIES + 1;
+  const collapsed = !showAll && !selectedHidden && categories.length > TOP_CATEGORIES;
   const visible = collapsed ? categories.slice(0, TOP_CATEGORIES) : categories;
   return (
     <View style={styles.grid}>
@@ -307,11 +334,25 @@ function CategoryGrid({
   );
 }
 
-function WalletPicker({ wallets, selected, onSelect }: { wallets: Wallet[]; selected: number | null; onSelect: (id: number) => void }) {
+/** Belum ada dompet aktif (form pinjaman web): teks + tautan "Tambah dompet dulu". */
+export function NoWallets() {
+  return (
+    <View style={styles.noWallets}>
+      <AppText size={14} lineHeight={20} tone="mutedForeground">
+        Belum ada dompet aktif.
+      </AppText>
+      <TextLink label="Tambah dompet dulu" onPress={() => router.push("/wallet/new")} />
+    </View>
+  );
+}
+
+export function WalletPicker({ wallets, selected, onSelect }: { wallets: Wallet[]; selected: number | null; onSelect: (id: number) => void }) {
   // Dompet terpilih saat form dibuka bisa berada di luar layar (mis. dompet tabungan di ujung kanan pada
   // "Tabung ke target"): geser barisnya agar pilihan itu terlihat, sama dengan web. Hanya sekali saat tampil.
   const scroller = useRef<ScrollViewInstance>(null);
-  const [initial] = useState(selected);
+  // Pilihan awal = pilihan pertama yang ada (data dompet bisa datang setelah form tampil).
+  const [initial, setInitial] = useState(selected);
+  if (initial === null && selected !== null) setInitial(selected);
   const layout = useRef<{ viewport?: number; chip?: { x: number; width: number }; done: boolean }>({ done: false });
   const reveal = () => {
     const { viewport, chip, done } = layout.current;
@@ -391,5 +432,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   submit: { marginTop: 4 },
+  noWallets: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 4 },
 });
 

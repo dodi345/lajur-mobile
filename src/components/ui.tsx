@@ -1,3 +1,4 @@
+import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { Children, Fragment, isValidElement, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
@@ -15,6 +16,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { Icon, type BoxIconName } from "@/components/icon";
+import { displayDate } from "@/lib/date";
 import { font, RADIUS, TALL, TOUCH, useTheme, type Theme, type Weight } from "@/lib/theme";
 
 // Komponen dasar = komponen web Lajur (components/ui/*, form-field, money-input) dengan ukuran persis.
@@ -244,6 +246,63 @@ export function MoneyInput({
   );
 }
 
+function toDate(iso: string): Date {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y ?? 2026, (m ?? 1) - 1, d ?? 1);
+}
+
+/**
+ * Isian tanggal = <input type="date"> web di HP: kotak seperti Input (h-13, "dd/mm/yyyy"), diketuk membuka
+ * kalender Android. `min`/`max` "YYYY-MM-DD"; `clearable` = tanggal opsional (tombol X untuk mengosongkan).
+ */
+export function DateField({
+  value,
+  onChange,
+  min,
+  max,
+  invalid,
+  clearable,
+  accessibilityLabel,
+}: {
+  value: string | null;
+  onChange: (value: string | null) => void;
+  min?: string;
+  max?: string;
+  invalid?: boolean;
+  clearable?: boolean;
+  accessibilityLabel: string;
+}) {
+  const theme = useTheme();
+  const open = () => {
+    if (Platform.OS !== "android") return;
+    DateTimePickerAndroid.open({
+      value: toDate(value ?? max ?? min ?? "2026-01-01"),
+      mode: "date",
+      minimumDate: min ? toDate(min) : undefined,
+      maximumDate: max ? toDate(max) : undefined,
+      onChange: (event, picked) => {
+        if (event.type !== "set" || !picked) return;
+        const pad = (n: number) => String(n).padStart(2, "0");
+        onChange(`${picked.getFullYear()}-${pad(picked.getMonth() + 1)}-${pad(picked.getDate())}`);
+      },
+    });
+  };
+  return (
+    <View style={[styles.dateField, { backgroundColor: theme.inputBg, borderColor: invalid ? theme.destructive : theme.border }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} onPress={open} style={styles.dateValue}>
+        <AppText size={16} lineHeight={22} tone={value ? "foreground" : "mutedForeground"} numeric>
+          {value ? displayDate(value) : "dd/mm/yyyy"}
+        </AppText>
+      </Pressable>
+      {clearable && value ? (
+        <Pressable accessibilityRole="button" accessibilityLabel={`Kosongkan ${accessibilityLabel.toLowerCase()}`} onPress={() => onChange(null)} style={styles.dateClear} hitSlop={4}>
+          <Icon name="X" size={20} color={theme.mutedForeground} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 /** Chip pilihan (radio): min-h-11 rounded-xl border, terpilih = garis primary + latar primary 5% + teks primary. */
 export function ChoiceChip({
   selected,
@@ -457,6 +516,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   moneyText: { flex: 1, height: "100%", padding: 0 },
+  dateField: { height: TALL, flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: RADIUS.xl },
+  dateValue: { flex: 1, height: "100%", justifyContent: "center", paddingHorizontal: 16 },
+  dateClear: { width: TOUCH, height: "100%", alignItems: "center", justifyContent: "center" },
   chip: {
     minHeight: TOUCH,
     borderWidth: 1,

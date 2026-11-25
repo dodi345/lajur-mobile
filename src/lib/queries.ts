@@ -2,9 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   request,
   type Category,
+  type DebtDetail,
+  type DebtList,
   type Goal,
   type GoalDetail,
   type Home,
+  type ManagedCategory,
   type DeviceSession,
   type MessageResult,
   type MonthlySummary,
@@ -14,6 +17,7 @@ import {
   type Transaction,
   type TransactionInput,
   type TransactionList,
+  type TrashItem,
   type Wallet,
 } from "@/lib/api";
 
@@ -259,5 +263,113 @@ export function useSetGoalArchived(id: number) {
     mutationFn: (archived: boolean) =>
       request<MessageResult>(`/api/v1/goals/${id}/${archived ? "archive" : "restore"}`, { method: "POST" }),
     onSuccess: refresh,
+  });
+}
+
+// ── Utang & Piutang (US-15..21) ────────────────────────────────────────────────────────────────
+
+export function useDebts() {
+  return useQuery({ queryKey: ["debts"], queryFn: () => request<DebtList>("/api/v1/debts") });
+}
+
+export function useDebt(id: number) {
+  return useQuery({ queryKey: ["debt", id], queryFn: () => request<DebtDetail>(`/api/v1/debts/${id}`) });
+}
+
+export type NewDebtInput = {
+  kind: "lend" | "borrow";
+  /** Pinjaman lama (US-21): tanpa dompet, saldo dompet tidak berubah. */
+  existing: boolean;
+  counterparty: string;
+  amount: number | null;
+  walletId: number | null;
+  transactionDate: string;
+  dueDate: string | null;
+  note: string;
+};
+
+export function useRecordDebt() {
+  const refresh = useRefreshAll();
+  return useMutation({
+    mutationFn: (input: NewDebtInput) => request<{ id: number; message: string }>("/api/v1/debts", { method: "POST", body: input }),
+    onSuccess: refresh,
+  });
+}
+
+export type RepaymentInput = { amount: number | null; walletId: number | null; transactionDate: string; note: string };
+
+export function usePayDebt(id: number) {
+  const refresh = useRefreshAll();
+  return useMutation({
+    mutationFn: (input: RepaymentInput) =>
+      request<{ id: number; message: string }>(`/api/v1/debts/${id}/pay`, { method: "POST", body: input }),
+    onSuccess: refresh,
+  });
+}
+
+// ── Kategori (US-11) ─────────────────────────────────────────────────────────────────────────────
+
+export function useManagedCategories(kind: "expense" | "income") {
+  return useQuery({
+    queryKey: ["categories", "manage", kind],
+    queryFn: () => request<{ active: ManagedCategory[]; archived: ManagedCategory[] }>(`/api/v1/categories?kind=${kind}&view=manage`),
+  });
+}
+
+export function useCategory(id: number) {
+  return useQuery({
+    queryKey: ["categories", "detail", id],
+    queryFn: async () => (await request<{ category: ManagedCategory }>(`/api/v1/categories/${id}`)).category,
+  });
+}
+
+/** Kategori dipakai form catat dan halaman Kategori: setelah berubah, semua data kategori dimuat ulang. */
+function useRefreshCategories() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ predicate: (query) => ["categories", "transactions", "summary", "home"].includes(String(query.queryKey[0])) });
+}
+
+export function useCreateCategory() {
+  const refresh = useRefreshCategories();
+  return useMutation({
+    mutationFn: (input: { name: string; kind: "expense" | "income" }) =>
+      request<{ id: number; message: string }>("/api/v1/categories", { method: "POST", body: input }),
+    onSuccess: refresh,
+  });
+}
+
+export function useRenameCategory(id: number) {
+  const refresh = useRefreshCategories();
+  return useMutation({
+    mutationFn: (name: string) => request<MessageResult>(`/api/v1/categories/${id}`, { method: "PATCH", body: { name } }),
+    onSuccess: refresh,
+  });
+}
+
+/** Arsipkan (true) atau pulihkan (false) kategori (BR-09). */
+export function useSetCategoryArchived(id: number) {
+  const refresh = useRefreshCategories();
+  return useMutation({
+    mutationFn: (archived: boolean) =>
+      request<MessageResult>(`/api/v1/categories/${id}/${archived ? "archive" : "restore"}`, { method: "POST" }),
+    onSuccess: refresh,
+  });
+}
+
+// ── Sampah (BR-10) ───────────────────────────────────────────────────────────────────────────────
+
+export function useTrash() {
+  return useQuery({
+    queryKey: ["trash"],
+    queryFn: async () => (await request<{ items: TrashItem[] }>("/api/v1/trash")).items,
+  });
+}
+
+/** Pendaftaran dibuka/ditutup (DISABLE_SIGNUP di server); dipakai halaman Masuk dan Daftar tanpa login. */
+export function useSignUpStatus() {
+  return useQuery({
+    queryKey: ["signup-status"],
+    queryFn: async () => (await request<{ signUpOpen: boolean }>("/api/v1/auth/status")).signUpOpen,
+    staleTime: 5 * 60_000,
   });
 }
