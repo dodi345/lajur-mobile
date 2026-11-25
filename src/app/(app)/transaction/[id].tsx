@@ -1,91 +1,140 @@
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { StyleSheet, View } from "react-native";
-import { transactionDirection, transactionTitle } from "@/components/finance";
-import { FormScreen } from "@/components/screen";
+import { TransactionAmount } from "@/components/finance";
+import { Sheet, type SheetControls } from "@/components/sheet";
 import { useToast } from "@/components/toast";
 import { TransactionForm } from "@/components/transaction-form";
-import { AppText, Button, Card, ErrorState, Loading } from "@/components/ui";
-import { ApiError } from "@/lib/api";
-import { dayLabel } from "@/lib/date";
-import { formatSigned } from "@/lib/money";
+import { AppText, Button, ErrorState, IconChip, Loading } from "@/components/ui";
+import { ApiError, type Transaction } from "@/lib/api";
+import { groupLabel } from "@/lib/date";
 import { useDeleteTransaction, useHome, useRestoreTransaction, useSaveTransaction, useTransaction } from "@/lib/queries";
+import { RADIUS, useTheme } from "@/lib/theme";
 
-// Ubah atau hapus transaksi (US-09). Hapus = soft delete + toast "Batal" (BR-10), tanpa dialog.
+// Edit transaksi (US-09) + hapus tanpa dialog, bisa dibatalkan lewat toast "Batal" (BR-10).
+// Koreksi saldo tidak bisa diubah lewat form (hanya dihapus), sama dengan web.
 export default function TransactionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const transactionId = Number(id);
   const query = useTransaction(transactionId);
-  const save = useSaveTransaction(transactionId);
+  const adjustment = query.data?.type === "adjustment";
+  return (
+    <Sheet title={adjustment ? "Koreksi saldo" : "Edit transaksi"}>
+      {(controls) =>
+        query.isPending ? (
+          <Loading />
+        ) : query.isError ? (
+          <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />
+        ) : adjustment ? (
+          <AdjustmentDetail transaction={query.data} controls={controls} />
+        ) : (
+          <EditForm transaction={query.data} controls={controls} />
+        )
+      }
+    </Sheet>
+  );
+}
+
+function useDelete(transaction: Transaction, { close }: SheetControls) {
   const remove = useDeleteTransaction();
   const restore = useRestoreTransaction();
-  const today = useHome().data?.today;
   const toast = useToast();
-
-  if (query.isPending) return <Loading />;
-  if (query.isError) return <ErrorState message={query.error.message} onRetry={() => void query.refetch()} />;
-  const transaction = query.data;
-
-  const onDelete = () =>
+  const run = () =>
     remove.mutate(transaction.id, {
       onSuccess: () => {
-        router.back();
         toast({
-          message: "Transaksi dihapus.",
+          message: "Dihapus",
           actionLabel: "Batal",
           onAction: () =>
             restore.mutate(transaction.id, {
-              onSuccess: () => toast({ message: "Transaksi dipulihkan." }),
-              onError: (error) => toast({ message: error.message, tone: "warning" }),
+              onSuccess: () => toast({ message: "Transaksi dipulihkan" }),
+              onError: () => toast({ message: "Transaksi tidak bisa dipulihkan.", type: "error" }),
             }),
         });
+        close();
       },
-      onError: (error) => toast({ message: error.message, tone: "warning" }),
+      onError: (error) => toast({ message: error.message, type: "error" }),
     });
+  return { run, pending: remove.isPending };
+}
 
-  // Saldo awal / koreksi (adjustment) hanya diubah lewat dompet di web (BR-04).
-  if (transaction.type === "adjustment") {
-    return (
-      <FormScreen>
-        <Card>
-          <AppText variant="heading">{transactionTitle(transaction)}</AppText>
-          <AppText variant="title" numeric>
-            {formatSigned(transaction.amount, transactionDirection(transaction))}
-          </AppText>
-          <AppText tone="muted">
-            {transaction.toWalletName ?? transaction.fromWalletName} · {dayLabel(transaction.transactionDate)}
-          </AppText>
-        </Card>
-        <AppText tone="muted">Saldo awal dan koreksi saldo diubah lewat halaman dompet di web Lajur.</AppText>
-      </FormScreen>
-    );
-  }
-
-  const error = save.error instanceof ApiError ? save.error : null;
+function DeleteButton({ onPress, pending }: { onPress: () => void; pending: boolean }) {
   return (
-    <FormScreen>
-      <TransactionForm
-        initial={transaction}
-        today={today}
-        submitting={save.isPending}
-        fieldErrors={error?.fieldErrors ?? {}}
-        message={save.error ? (Object.keys(error?.fieldErrors ?? {}).length > 0 ? null : save.error.message) : null}
-        submitLabel="Simpan perubahan"
-        onSubmit={(input) =>
-          save.mutate(input, {
-            onSuccess: (result) => {
-              toast(result.warning ? { message: result.warning, tone: "warning" } : { message: "Perubahan disimpan." });
-              router.back();
-            },
-          })
-        }
-      />
-      <View style={styles.danger}>
-        <Button label="Hapus transaksi" variant="destructive" icon="delete" loading={remove.isPending} onPress={onDelete} />
+    <Button
+      label={pending ? "Menghapus…" : "Hapus transaksi"}
+      icon="Trash"
+      variant="destructive"
+      onPress={onPress}
+      disabled={pending}
+    />
+  );
+}
+
+function EditForm({ transaction, controls }: { transaction: Transaction; controls: SheetControls }) {
+  const theme = useTheme();
+  const save = useSaveTransaction(transaction.id);
+  const today = useHome().data?.today;
+  const toast = useToast();
+  const remove = useDelete(transaction, controls);
+  const error = save.error instanceof ApiError ? save.error : null;
+  const fieldErrors = error?.fieldErrors ?? {};
+  // Form, keterangan, dan tombol hapus = blok terpisah di sheet (jarak 24px), sama dengan web.
+  return (
+    <>
+    <TransactionForm
+      initial={transaction}
+      today={today}
+      submitting={save.isPending}
+      fieldErrors={fieldErrors}
+      message={save.error && Object.keys(fieldErrors).length === 0 ? save.error.message : null}
+      submitLabel="Simpan perubahan"
+      onSubmit={(input) =>
+        save.mutate(input, {
+          onSuccess: (result) => {
+            toast(result.warning ? { message: "Perubahan disimpan.", type: "warning", description: result.warning } : { message: "Perubahan disimpan." });
+            controls.close();
+          },
+        })
+      }
+    />
+      <AppText size={13} tone="mutedForeground">
+        Mengubah nominal atau tanggal ikut memperbarui saldo dompet dan ringkasan bulan terkait.
+      </AppText>
+      <View style={[styles.danger, { borderTopColor: theme.border }]}>
+        <DeleteButton onPress={remove.run} pending={remove.pending} />
       </View>
-    </FormScreen>
+    </>
+  );
+}
+
+function AdjustmentDetail({ transaction, controls }: { transaction: Transaction; controls: SheetControls }) {
+  const theme = useTheme();
+  const remove = useDelete(transaction, controls);
+  const today = useHome().data?.today;
+  const wallet = transaction.toWalletName ?? transaction.fromWalletName ?? "";
+  return (
+    <>
+      <View style={[styles.summaryCard, { backgroundColor: theme.muted }]}>
+        <IconChip name="SliderAlt" color={theme.transfer} background={theme.muted} />
+        <View style={styles.flex}>
+          <AppText weight={500} numberOfLines={1}>
+            {transaction.note || "Koreksi saldo"}
+          </AppText>
+          <AppText size={13} tone="mutedForeground">
+            Koreksi saldo · {wallet} · {groupLabel(transaction.transactionDate, today)}
+          </AppText>
+        </View>
+        <TransactionAmount type="adjustment" amount={transaction.amount} incoming={transaction.toWalletId !== null} />
+      </View>
+      <AppText size={13} tone="mutedForeground">
+        Saldo awal dan koreksi saldo dibuat dari halaman Dompet. Kalau salah, hapus lalu koreksi ulang saldo dompetnya.
+      </AppText>
+      <DeleteButton onPress={remove.run} pending={remove.pending} />
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  danger: { marginTop: 8 },
+  flex: { flex: 1, minWidth: 0 },
+  danger: { borderTopWidth: 1, paddingTop: 20 },
+  summaryCard: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: RADIUS.xl, padding: 16 },
 });

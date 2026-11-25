@@ -1,13 +1,18 @@
-import { useState, type ReactNode } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
-import { AppText, Button, Chip, FieldError, Segmented, TextField } from "@/components/ui";
-import type { Transaction, TransactionInput } from "@/lib/api";
-import { displayDate, parseDisplayDate, shiftDay } from "@/lib/date";
-import { formatAmountInput, groupThousands, parseAmountInput } from "@/lib/money";
+import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
+import { useState } from "react";
+import { Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { categoryIcon } from "@/components/finance";
+import { Icon } from "@/components/icon";
+import { AppText, Button, ChoiceChip, FormField, FormMessage, IconChip, Input, MoneyInput, Segmented } from "@/components/ui";
+import { WalletLogo } from "@/components/wallet-logo";
+import type { Category, Transaction, TransactionInput, Wallet } from "@/lib/api";
+import { displayDate, shiftDay } from "@/lib/date";
+import { formatAmountInput, formatRupiah, groupThousands, parseAmountInput } from "@/lib/money";
 import { useCategories, useWallets } from "@/lib/queries";
+import { RADIUS, useTheme } from "@/lib/theme";
 
-// Form catat/ubah transaksi (US-06/07/08/09). Validasi akhir tetap di server (skema Zod yang sama
-// dengan web); pesan per field dari server ditampilkan di bawah isian masing-masing.
+// Form catat/ubah transaksi = web (components/transactions/transaction-form.tsx). Validasi akhir di
+// server (skema Zod yang sama); pesan per field dari server tampil di bawah isiannya.
 
 type EntryType = TransactionInput["type"];
 
@@ -16,6 +21,17 @@ const TYPE_OPTIONS = [
   { value: "income", label: "Pemasukan" },
   { value: "transfer", label: "Transfer" },
 ] as const;
+
+/** Kategori: 5 yang paling sering dipakai + "Lainnya…" (kalau lebih dari 6), sama dengan web. */
+const TOP_CATEGORIES = 5;
+
+function Legend({ children }: { children: string }) {
+  return (
+    <AppText size={13} weight={500} tone="mutedForeground" style={styles.legend}>
+      {children}
+    </AppText>
+  );
+}
 
 export function TransactionForm({
   initial,
@@ -27,7 +43,7 @@ export function TransactionForm({
   onSubmit,
 }: {
   initial?: Transaction;
-  /** Hari ini menurut zona waktu user (dari server); belum ada = tanggal dikosongkan (server mengisi). */
+  /** Hari ini menurut zona waktu user (dari server). */
   today: string | undefined;
   submitting: boolean;
   fieldErrors: Record<string, string>;
@@ -36,156 +52,272 @@ export function TransactionForm({
   onSubmit: (input: TransactionInput) => void;
 }) {
   const wallets = useWallets();
-  const [type, setType] = useState<EntryType>(
-    initial && initial.type !== "adjustment" ? initial.type : "expense",
-  );
+  const [type, setType] = useState<EntryType>(initial && initial.type !== "adjustment" ? initial.type : "expense");
   const [amount, setAmount] = useState(initial ? groupThousands(initial.amount) : "");
   const [walletId, setWalletId] = useState<number | null>(
     initial ? (initial.type === "income" ? initial.toWalletId : initial.fromWalletId) : null,
   );
   const [toWalletId, setToWalletId] = useState<number | null>(initial?.type === "transfer" ? initial.toWalletId : null);
   const [categoryId, setCategoryId] = useState<number | null>(initial?.categoryId ?? null);
-  const [date, setDate] = useState(initial?.transactionDate ?? "");
-  const [otherDate, setOtherDate] = useState(initial && initial.transactionDate !== today ? displayDate(initial.transactionDate) : "");
-  const [dateMode, setDateMode] = useState<"today" | "yesterday" | "other">(
-    !initial || initial.transactionDate === today ? "today" : today && initial.transactionDate === shiftDay(today, -1) ? "yesterday" : "other",
-  );
+  const [date, setDate] = useState<string | null>(initial?.transactionDate ?? null);
+  const [noteOpen, setNoteOpen] = useState(Boolean(initial?.note));
   const [note, setNote] = useState(initial?.note ?? "");
-  const [localError, setLocalError] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
   const categories = useCategories(type === "income" ? "income" : "expense");
 
   const walletList = wallets.data ?? [];
-  // Dompet pertama dipilih otomatis untuk transaksi baru.
   const selectedWallet = walletId ?? (initial ? null : (walletList[0]?.id ?? null));
+  const selectedDate = date ?? today ?? null;
+  const yesterday = today ? shiftDay(today, -1) : null;
 
-  const chooseDate = (mode: "today" | "yesterday" | "other") => {
-    setDateMode(mode);
-    if (mode === "today") setDate(today ?? "");
-    if (mode === "yesterday" && today) setDate(shiftDay(today, -1));
-    if (mode === "other") setDate(parseDisplayDate(otherDate) ?? "");
+  const pickDate = () => {
+    if (Platform.OS !== "android") return;
+    const [y, m, d] = (selectedDate ?? "2026-01-01").split("-").map(Number);
+    const [ty, tm, td] = (today ?? "2100-12-31").split("-").map(Number);
+    DateTimePickerAndroid.open({
+      value: new Date(y ?? 2026, (m ?? 1) - 1, d ?? 1),
+      mode: "date",
+      maximumDate: new Date(ty ?? 2100, (tm ?? 12) - 1, td ?? 31),
+      onChange: (event, value) => {
+        if (event.type !== "set" || !value) return;
+        const pad = (n: number) => String(n).padStart(2, "0");
+        setDate(`${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`);
+      },
+    });
   };
 
-  const submit = () => {
-    setLocalError(null);
-    let transactionDate = dateMode === "today" ? (today ?? "") : date;
-    if (dateMode === "other") {
-      const parsed = parseDisplayDate(otherDate);
-      if (!parsed) {
-        setLocalError("Tulis tanggal sebagai HH/BB/TTTT, mis. 08/11/2026.");
-        return;
-      }
-      transactionDate = parsed;
-    }
+  const submit = () =>
     onSubmit({
       type,
       amount: parseAmountInput(amount),
       walletId: selectedWallet,
       toWalletId: type === "transfer" ? toWalletId : null,
       categoryId: type === "transfer" ? null : categoryId,
-      transactionDate,
+      transactionDate: selectedDate ?? "",
       note: note.trim(),
     });
-  };
 
   return (
     <View style={styles.form}>
+      {message ? <FormMessage message={message} /> : null}
       <Segmented
         options={TYPE_OPTIONS}
         value={type}
         onChange={(next) => {
           setType(next);
           setCategoryId(null);
+          setShowAll(false);
         }}
       />
-      <FieldError message={fieldErrors.type} />
 
-      <TextField
-        label="Nominal (Rp)"
-        value={amount}
-        onChangeText={(text) => setAmount(formatAmountInput(text))}
-        keyboardType="number-pad"
-        placeholder="0"
-        error={fieldErrors.amount}
-        style={styles.amount}
-        autoFocus={!initial}
-      />
-
-      <Picker label={type === "income" ? "Masuk ke dompet" : "Dari dompet"} error={fieldErrors.walletId}>
-        {walletList.map((wallet) => (
-          <Chip key={wallet.id} label={wallet.name} selected={selectedWallet === wallet.id} onPress={() => setWalletId(wallet.id)} />
-        ))}
-      </Picker>
-      {wallets.isSuccess && walletList.length === 0 && (
-        <AppText tone="muted">Belum ada dompet. Tambahkan dompet dulu dari tab Dompet.</AppText>
-      )}
-
-      {type === "transfer" ? (
-        <Picker label="Ke dompet" error={fieldErrors.toWalletId}>
-          {walletList
-            .filter((wallet) => wallet.id !== selectedWallet)
-            .map((wallet) => (
-              <Chip key={wallet.id} label={wallet.name} selected={toWalletId === wallet.id} onPress={() => setToWalletId(wallet.id)} />
-            ))}
-        </Picker>
-      ) : (
-        <Picker label="Kategori" error={fieldErrors.categoryId}>
-          {(categories.data ?? []).map((category) => (
-            <Chip key={category.id} label={category.name} selected={categoryId === category.id} onPress={() => setCategoryId(category.id)} />
-          ))}
-        </Picker>
-      )}
-
-      <Picker label="Tanggal" error={fieldErrors.transactionDate ?? localError ?? undefined}>
-        <Chip label="Hari ini" selected={dateMode === "today"} onPress={() => chooseDate("today")} />
-        {today && <Chip label="Kemarin" selected={dateMode === "yesterday"} onPress={() => chooseDate("yesterday")} />}
-        <Chip label="Tanggal lain" selected={dateMode === "other"} onPress={() => chooseDate("other")} />
-      </Picker>
-      {dateMode === "other" && (
-        <TextField
-          label="Tanggal (HH/BB/TTTT)"
-          value={otherDate}
-          onChangeText={setOtherDate}
-          placeholder="08/11/2026"
-          keyboardType="numbers-and-punctuation"
+      <FormField label="Nominal" error={fieldErrors.amount}>
+        <MoneyInput
+          value={amount}
+          onChangeText={(text) => setAmount(formatAmountInput(text))}
+          invalid={Boolean(fieldErrors.amount)}
+          autoFocus={!initial}
+          accessibilityLabel="Nominal"
         />
+      </FormField>
+
+      {type !== "transfer" && (
+        <View>
+          <Legend>Kategori</Legend>
+          <CategoryGrid
+            categories={categories.data ?? []}
+            selected={categoryId}
+            onSelect={setCategoryId}
+            showAll={showAll}
+            onShowAll={() => setShowAll(true)}
+          />
+          {fieldErrors.categoryId ? (
+            <AppText size={13} tone="destructive" style={styles.errorBelow}>
+              {fieldErrors.categoryId}
+            </AppText>
+          ) : null}
+        </View>
       )}
 
-      <TextField
-        label="Catatan (opsional)"
-        value={note}
-        onChangeText={setNote}
-        placeholder="mis. makan siang"
-        maxLength={200}
-        error={fieldErrors.note}
-      />
+      <View>
+        <Legend>{type === "income" ? "Masuk ke dompet" : "Dari dompet"}</Legend>
+        <WalletPicker wallets={walletList} selected={selectedWallet} onSelect={setWalletId} />
+        {fieldErrors.walletId ? (
+          <AppText size={13} tone="destructive" style={styles.errorBelow}>
+            {fieldErrors.walletId}
+          </AppText>
+        ) : null}
+        {wallets.isSuccess && walletList.length === 0 ? (
+          <AppText size={13} tone="mutedForeground">
+            Belum ada dompet. Tambahkan dompet dulu dari Beranda → Dompet.
+          </AppText>
+        ) : null}
+      </View>
 
-      {message && (
-        <AppText tone="destructive" accessibilityRole="alert">
-          {message}
-        </AppText>
+      {type === "transfer" && (
+        <>
+          <View>
+            <Legend>Ke dompet</Legend>
+            <WalletPicker
+              wallets={walletList.filter((wallet) => wallet.id !== selectedWallet)}
+              selected={toWalletId}
+              onSelect={setToWalletId}
+            />
+            {fieldErrors.toWalletId ? (
+              <AppText size={13} tone="destructive" style={styles.errorBelow}>
+                {fieldErrors.toWalletId}
+              </AppText>
+            ) : null}
+          </View>
+          <AppText size={13} tone="mutedForeground" style={styles.transferNote}>
+            Transfer tidak dihitung sebagai pengeluaran maupun pemasukan.
+          </AppText>
+        </>
       )}
-      <Button label={submitLabel} onPress={submit} loading={submitting} />
+
+      <View>
+        <Legend>Tanggal</Legend>
+        <View style={styles.dateRow}>
+          <ChoiceChip label="Hari ini" selected={selectedDate === today} onPress={() => setDate(today ?? null)} style={styles.dateChip} />
+          {yesterday ? (
+            <ChoiceChip label="Kemarin" selected={selectedDate === yesterday} onPress={() => setDate(yesterday)} style={styles.dateChip} />
+          ) : null}
+          <ChoiceChip
+            label={selectedDate ? displayDate(selectedDate) : "Pilih tanggal"}
+            accessibilityLabel="Pilih tanggal lain"
+            selected={selectedDate !== null && selectedDate !== today && selectedDate !== yesterday}
+            onPress={pickDate}
+            style={styles.dateChip}
+          />
+        </View>
+        {fieldErrors.transactionDate ? (
+          <AppText size={13} tone="destructive" style={styles.errorBelow}>
+            {fieldErrors.transactionDate}
+          </AppText>
+        ) : null}
+      </View>
+
+      {noteOpen ? (
+        <FormField label="Catatan" error={fieldErrors.note}>
+          <Input value={note} onChangeText={setNote} placeholder="mis. Makan siang" maxLength={255} accessibilityLabel="Catatan" />
+        </FormField>
+      ) : (
+        <NoteButton onPress={() => setNoteOpen(true)} />
+      )}
+
+      <Button label={submitting ? "Menyimpan…" : submitLabel} big onPress={submit} disabled={submitting} style={styles.submit} />
     </View>
   );
 }
 
-function Picker({ label, error, children }: { label: string; error?: string; children: ReactNode }) {
+function NoteButton({ onPress }: { onPress: () => void }) {
+  const theme = useTheme();
   return (
-    <View style={styles.picker}>
-      <AppText variant="label" tone="muted">
-        {label}
+    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.noteButton, pressed && { opacity: 0.7 }]}>
+      <Icon name="Note" size={20} color={theme.primary} />
+      <AppText size={14} weight={500} lineHeight={20} tone="primary">
+        Tambah catatan
       </AppText>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-        {children}
-      </ScrollView>
-      <FieldError message={error} />
+    </Pressable>
+  );
+}
+
+function CategoryGrid({
+  categories,
+  selected,
+  onSelect,
+  showAll,
+  onShowAll,
+}: {
+  categories: Category[];
+  selected: number | null;
+  onSelect: (id: number) => void;
+  showAll: boolean;
+  onShowAll: () => void;
+}) {
+  const theme = useTheme();
+  const selectedHidden = selected !== null && categories.findIndex((category) => category.id === selected) >= TOP_CATEGORIES;
+  const collapsed = !showAll && !selectedHidden && categories.length > TOP_CATEGORIES + 1;
+  const visible = collapsed ? categories.slice(0, TOP_CATEGORIES) : categories;
+  return (
+    <View style={styles.grid}>
+      {visible.map((category) => {
+        const active = category.id === selected;
+        return (
+          <View key={category.id} style={styles.cell}>
+            <ChoiceChip selected={active} onPress={() => onSelect(category.id)} accessibilityLabel={category.name} style={styles.categoryTile}>
+              <IconChip name={categoryIcon(category.icon)} size={32} />
+              <AppText size={13} weight={500} numberOfLines={1} style={{ color: active ? theme.primary : theme.foreground }}>
+                {category.name}
+              </AppText>
+            </ChoiceChip>
+          </View>
+        );
+      })}
+      {collapsed ? (
+        <View style={styles.cell}>
+          <ChoiceChip selected={false} onPress={onShowAll} accessibilityLabel="Tampilkan semua kategori" style={styles.categoryTile}>
+            <AppText size={13} tone="mutedForeground">
+              Lainnya…
+            </AppText>
+          </ChoiceChip>
+        </View>
+      ) : null}
     </View>
+  );
+}
+
+function WalletPicker({ wallets, selected, onSelect }: { wallets: Wallet[]; selected: number | null; onSelect: (id: number) => void }) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bleed} contentContainerStyle={styles.walletRow}>
+      {wallets.map((wallet) => (
+        <ChoiceChip
+          key={wallet.id}
+          selected={wallet.id === selected}
+          onPress={() => onSelect(wallet.id)}
+          accessibilityLabel={`${wallet.name}, saldo ${formatRupiah(wallet.balance)}`}
+          style={styles.walletChip}
+        >
+          <WalletLogo type={wallet.type} brand={wallet.brand} />
+          <View>
+            {/* Nama disembunyikan kalau dompet punya logo merek (sama dengan web). */}
+            {!wallet.brand ? (
+              <AppText size={14} weight={500} lineHeight={20} numberOfLines={1} style={styles.walletName}>
+                {wallet.name}
+              </AppText>
+            ) : null}
+            <AppText size={12} tone={wallet.balance < 0 ? "warning" : "mutedForeground"} numeric>
+              {formatRupiah(wallet.balance)}
+            </AppText>
+          </View>
+        </ChoiceChip>
+      ))}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  form: { gap: 18 },
-  amount: { fontSize: 26, fontWeight: "700", minHeight: 60, fontVariant: ["tabular-nums"] },
-  picker: { gap: 8 },
-  chips: { gap: 8, paddingRight: 8 },
+  form: { gap: 20 },
+  legend: { marginBottom: 8 },
+  errorBelow: { marginTop: 6 },
+  grid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, rowGap: 8 },
+  cell: { width: "33.333%", paddingHorizontal: 4 },
+  categoryTile: { minHeight: 64, flexDirection: "column", gap: 4, paddingHorizontal: 4, paddingVertical: 8 },
+  bleed: { marginHorizontal: -16 },
+  walletRow: { gap: 8, paddingHorizontal: 16, paddingBottom: 4 },
+  walletChip: { minHeight: 56, justifyContent: "flex-start", gap: 8, paddingVertical: 8, paddingLeft: 8, paddingRight: 16 },
+  walletName: { maxWidth: 128 },
+  transferNote: { marginTop: -8 },
+  dateRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  dateChip: { paddingHorizontal: 16 },
+  noteButton: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    alignSelf: "flex-start",
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: 4,
+  },
+  submit: { marginTop: 4 },
 });
+

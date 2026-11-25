@@ -33,3 +33,9 @@ export function parseAmountInput(text: string): number | null {
   const digits = text.replace(/\D/g, "");
   return digits === "" ? null : Number(digits);
 }
+
+/** 0.3862 → "38,6%" (persen id-ID web: maks. 1 desimal, koma, tanpa spasi). */
+export function formatPercent(share: number): string {
+  const rounded = Math.round(share * 1000) / 10;
+  return `${String(rounded).replace(".", ",")}%`;
+}

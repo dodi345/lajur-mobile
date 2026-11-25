@@ -3,9 +3,14 @@
 App Android native (React Native + Expo SDK 58) untuk **Lajur - Catat Uangmu**. Data dan aturan bisnis
 ada di server Lajur (repo `money-management`, API `/api/v1`); app ini hanya tampilan native-nya.
 
-Versi 1: masuk/daftar, Beranda (kekayaan bersih, ringkasan bulan ini, dompet, transaksi terakhir),
-transaksi (daftar per bulan, catat, ubah, hapus + Batal), dompet (daftar, tambah, detail), ringkasan
-bulanan, akun + keluar. Target tabungan, utang & piutang, kategori, ekspor, dan bot Telegram tetap di web.
+Tampilan app **sama persis dengan PWA Lajur**: font Inter, ikon Boxicons (glyph yang sama, digambar dengan
+`react-native-svg`), token warna terang/gelap, logo bank/e-wallet, nav bawah kapsul kaca (Beranda · Transaksi · + ·
+Target · Akun), form sebagai bottom sheet, dan toast di atas layar.
+
+Isi: masuk/daftar, Beranda, Transaksi (filter dompet/kategori/jenis, total per tanggal), Dompet (daftar, tambah dengan
+logo, detail), Ringkasan bulanan, Target (daftar), Akun (profil, tema, kurangi efek kaca, keluar). Yang belum ada
+di API app (koreksi saldo/ubah/arsip dompet, buat target, ubah profil, utang & piutang, kategori, ekspor, akun demo)
+membuka halaman yang sama di web Lajur.
 
 ## Menjalankan saat pengembangan
 
@@ -42,8 +47,11 @@ npx expo-doctor     # cek kecocokan dependency dengan SDK
 
 ```
 src/app/            layar (expo-router): login + register (di akar), (app)/(tabs)/ empat tab, transaction/, wallet/, profile
-src/components/     ui (teks, tombol, input, chip), finance (baris transaksi/dompet, ringkasan), form transaksi, toast
-src/lib/            api (klien /api/v1 + tipe), auth (sesi, SecureStore), queries (TanStack Query), money, date, theme
+src/components/     ui (teks, tombol, input, chip), icon (Boxicons), glass, sheet, screen (halaman + nav bawah), finance,
+                    wallet-logo, transaction-form, picker, toast, auth-shell
+src/lib/            api (klien /api/v1 + tipe), auth (sesi, SecureStore), queries (TanStack Query), money, date,
+                    theme (token = globals.css web, tema per perangkat), boxicons (data path ikon, dibangkitkan)
+assets/logos/       logo bank/e-wallet, ilustrasi dompet tunai, logo Lajur (file yang sama dengan public/ web)
 ```
 
 ## Keamanan

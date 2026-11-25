@@ -34,7 +34,8 @@
         }
       ],
       "expo-secure-store",
-      "./plugins/with-release-signing"
+      "./plugins/with-release-signing",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

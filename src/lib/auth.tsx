@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import * as SecureStore from "expo-secure-store";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Platform } from "react-native";
 import { ApiError, rawRequest, request, setApiToken, setUnauthorizedHandler, type User } from "@/lib/api";
 
 // Sesi app: token sesi Better Auth (plugin bearer di server) disimpan terenkripsi di Android Keystore
@@ -8,15 +9,27 @@ import { ApiError, rawRequest, request, setApiToken, setUnauthorizedHandler, typ
 
 const TOKEN_KEY = "lajur.session-token";
 
+// SecureStore tidak ada di web; versi web app hanya dipakai untuk pratinjau tampilan saat pengembangan.
+const tokenStore = {
+  get: () =>
+    Platform.OS === "web" ? Promise.resolve(globalThis.localStorage?.getItem(TOKEN_KEY) ?? null) : SecureStore.getItemAsync(TOKEN_KEY),
+  set: (value: string) =>
+    Platform.OS === "web" ? Promise.resolve(globalThis.localStorage?.setItem(TOKEN_KEY, value)) : SecureStore.setItemAsync(TOKEN_KEY, value),
+  remove: () =>
+    Platform.OS === "web" ? Promise.resolve(globalThis.localStorage?.removeItem(TOKEN_KEY)) : SecureStore.deleteItemAsync(TOKEN_KEY),
+};
+
 type AuthStatus = "loading" | "signedOut" | "signedIn";
 
 type AuthContextValue = {
   status: AuthStatus;
   /** null saat sesi ada tapi profil belum bisa dimuat (mis. offline saat app dibuka). */
   user: User | null;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   signUp: (name: string, email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Keluar dari semua perangkat (semua sesi akun ini dicabut di server). */
+  signOutEverywhere: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -43,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const clearLocal = useCallback(async () => {
     setApiToken(null);
-    await SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {});
+    await tokenStore.remove().catch(() => {});
     queryClient.clear();
     setUser(null);
     setStatus("signedOut");
@@ -59,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const saved = await SecureStore.getItemAsync(TOKEN_KEY).catch(() => null);
+      const saved = await tokenStore.get().catch(() => null);
       if (!saved) {
         if (alive) setStatus("signedOut");
         return;
@@ -85,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const acceptSession = useCallback(async (headers: Headers) => {
     const sessionToken = headers.get("set-auth-token");
     if (!sessionToken) throw new Error("Server tidak mengirim token sesi.");
-    await SecureStore.setItemAsync(TOKEN_KEY, sessionToken);
+    await tokenStore.set(sessionToken);
     setApiToken(sessionToken);
     const { user: me } = await request<{ user: User }>("/api/v1/me");
     setUser(me);
@@ -93,11 +106,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = useCallback(
-    async (email: string, password: string) => {
-      // rememberMe: sesi 7 hari dan diperpanjang selama dipakai (BR-42), seperti "Ingat saya" di web.
+    async (email: string, password: string, rememberMe = true) => {
+      // "Ingat saya" (BR-42): sesi 7 hari dan diperpanjang selama dipakai; dimatikan = sesi pendek (maks. 24 jam).
       const { headers } = await rawRequest("/api/auth/sign-in/email", {
         method: "POST",
-        body: { email: email.trim(), password, rememberMe: true },
+        body: { email: email.trim(), password, rememberMe },
       });
       await acceptSession(headers);
     },
@@ -121,9 +134,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await clearLocal();
   }, [clearLocal]);
 
+  const signOutEverywhere = useCallback(async () => {
+    await rawRequest("/api/auth/revoke-sessions", { method: "POST", body: {} }).catch(() => {});
+    await clearLocal();
+  }, [clearLocal]);
+
   const value = useMemo(
-    () => ({ status, user, signIn, signUp, signOut }),
-    [status, user, signIn, signUp, signOut],
+    () => ({ status, user, signIn, signUp, signOut, signOutEverywhere }),
+    [status, user, signIn, signUp, signOut, signOutEverywhere],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

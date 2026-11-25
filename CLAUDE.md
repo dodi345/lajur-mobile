@@ -14,7 +14,9 @@ Selalu balas dalam **Bahasa Indonesia**. Panduan Expo umum ada di `AGENTS.md` (d
 ## Stack (terkunci, jangan tambah library tanpa izin)
 
 - Expo SDK 58, expo-router (Stack, `Stack.Protected`, `NativeTabs`), React Native 0.88
-- `@tanstack/react-query` untuk data, `expo-secure-store` untuk token, `expo-symbols` (Material Symbols) untuk ikon
+- `@tanstack/react-query` untuk data, `expo-secure-store` untuk token dan pilihan tampilan
+- Tampilan: `@expo-google-fonts/inter`, `react-native-svg` (ikon Boxicons + logo), `expo-blur` (efek kaca),
+  `@react-native-community/datetimepicker` (pilih tanggal)
 - Jest (`jest-expo`) + `@testing-library/react-native` untuk test
 - Pasang paket dengan `npx expo install` (versi cocok dengan SDK), bukan `npm install <paket>`
 - Tidak ada `android/` atau `ios/` di repo (dibuat `expo prebuild` saat build)
@@ -22,7 +24,11 @@ Selalu balas dalam **Bahasa Indonesia**. Panduan Expo umum ada di `AGENTS.md` (d
 
 ## Aturan UI
 
-- Token warna sama dengan web (`src/lib/theme.ts`); jangan pakai warna mentah di layar.
+- **Tampilan harus identik dengan PWA Lajur** (keputusan pengguna 2026-11-25). Sebelum mengubah layar, lihat komponen
+  web yang sama di `money-management` dan cocokkan ukuran, warna, teks, dan ikon. Jangan memakai komponen bergaya
+  bawaan Android (tab Material, dialog Material, Material Symbols).
+- Token warna, radius, dan font hanya dari `src/lib/theme.tsx` (= `app/globals.css` web); jangan pakai warna mentah
+  di layar. Font Inter 400/500/600/700 lewat `font()` / `AppText`, ikon hanya Boxicons lewat `Icon`.
 - Pengeluaran merah + "−", pemasukan hijau + "+", transfer abu-abu; aksi berbahaya selalu punya label teks.
 - Nominal: `formatRupiah` ("Rp 25.000"), `tabular-nums`. Area sentuh minimal 44×44.
 - Hapus transaksi tanpa dialog: toast "Transaksi dihapus · Batal" (BR-10).

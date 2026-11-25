@@ -28,7 +28,7 @@ describe("navigasi sesuai status login", () => {
     mockStatus = "signedOut";
     const router = await open("/");
     expect(router.getPathname()).toBe("/login");
-    expect(screen.getByText(/Catat uangmu/)).toBeOnTheScreen();
+    expect(screen.getByText("Lanjutkan mencatat keuanganmu.")).toBeOnTheScreen();
     expect(screen.queryByText(/Unmatched/)).toBeNull();
   });
 

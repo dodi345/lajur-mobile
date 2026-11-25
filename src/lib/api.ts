@@ -111,14 +111,17 @@ export type Transaction = {
   toWalletType: WalletType | null;
   categoryId: number | null;
   categoryName: string | null;
+  /** Nama ikon Boxicons kategori (kolom categories.icon); null = Tag. */
+  categoryIcon: string | null;
 };
 
-export type Category = { id: number; name: string; kind: "expense" | "income"; usageCount: number };
+export type Category = { id: number; name: string; kind: "expense" | "income"; icon: string | null; usageCount: number };
 
 export type CategoryShare = {
   type: "expense" | "income";
   categoryId: number;
   categoryName: string;
+  categoryIcon: string | null;
   total: number;
   share: number;
 };
@@ -140,6 +143,45 @@ export type Home = {
   wallets: Wallet[];
   summary: MonthlySummary;
   recentTransactions: Transaction[];
+  /** Target belum tercapai, maks. 2. */
+  goals: Goal[];
+};
+
+export type GoalProgress = { share: number; remaining: number; achieved: boolean; daysLeft: number | null };
+
+export type Goal = {
+  id: number;
+  name: string;
+  targetAmount: number;
+  deadline: string | null;
+  walletId: number;
+  walletName: string;
+  walletType: WalletType;
+  walletBrand: string | null;
+  balance: number;
+  /** Tanggal tercapai (lokal user, YYYY-MM-DD). */
+  achievedOn: string | null;
+  archived: boolean;
+  progress: GoalProgress;
+};
+
+export type TransactionList = {
+  month: string;
+  today: string;
+  transactions: Transaction[];
+  totals: { income: number; expense: number };
+  /** Per tanggal (urut seperti daftar): judul "Hari ini · Rab, 25 Nov" dan total harian (BR-05). */
+  days: { date: string; label: string; net: number }[];
+};
+
+export type Profile = {
+  id: string;
+  name: string;
+  email: string;
+  timezone: string;
+  emailVerified: boolean;
+  avatarColor: string | null;
+  joinedOn: string;
 };
 
 export type TransactionInput = {

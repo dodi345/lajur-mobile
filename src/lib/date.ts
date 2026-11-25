@@ -65,3 +65,9 @@ export function displayDate(date: string): string {
   const [y, m, d] = date.split("-");
   return `${d}/${m}/${y}`;
 }
+
+/** "2026-08-12" → "12 Agu 2026" (formatShortDate web). */
+export function shortDate(date: string): string {
+  const value = parse(date);
+  return `${value.getUTCDate()} ${MONTHS_SHORT[value.getUTCMonth()]} ${value.getUTCFullYear()}`;
+}

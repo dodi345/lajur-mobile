@@ -1,15 +1,20 @@
+import { Inter_400Regular } from "@expo-google-fonts/inter/400Regular";
+import { Inter_500Medium } from "@expo-google-fonts/inter/500Medium";
+import { Inter_600SemiBold } from "@expo-google-fonts/inter/600SemiBold";
+import { Inter_700Bold } from "@expo-google-fonts/inter/700Bold";
 import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useFonts } from "expo-font";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { AppState, useColorScheme } from "react-native";
+import { AppState } from "react-native";
 import { ToastProvider } from "@/components/toast";
 import { ApiError } from "@/lib/api";
 import { AuthProvider, useAuth } from "@/lib/auth";
-import { DARK, LIGHT } from "@/lib/theme";
+import { PreferencesProvider, useTheme } from "@/lib/theme";
 
-// Layar pembuka tetap tampil sampai status login diketahui (token tersimpan dicek ke server).
+// Layar pembuka tetap tampil sampai font Inter siap dan status login diketahui.
 SplashScreen.preventAutoHideAsync();
 
 function createQueryClient() {
@@ -24,14 +29,15 @@ function createQueryClient() {
   });
 }
 
-function RootNavigator() {
+function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
   const { status } = useAuth();
+  const ready = fontsReady && status !== "loading";
 
   useEffect(() => {
-    if (status !== "loading") void SplashScreen.hideAsync();
-  }, [status]);
+    if (ready) void SplashScreen.hideAsync();
+  }, [ready]);
 
-  if (status === "loading") return null;
+  if (!ready) return null;
   const signedIn = status === "signedIn";
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -42,17 +48,38 @@ function RootNavigator() {
           terkunci) dialihkan ke layar pertama yang tersedia, yaitu login. Dalam grup, "/" jadi Unmatched Route. */}
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="login" />
-        <Stack.Screen name="register" options={{ headerShown: true, headerTitle: "", headerShadowVisible: false }} />
+        <Stack.Screen name="register" />
       </Stack.Protected>
     </Stack>
   );
 }
 
+function Themed({ children }: { children: React.ReactNode }) {
+  const theme = useTheme();
+  const base = theme.dark ? DarkTheme : DefaultTheme;
+  return (
+    <ThemeProvider
+      value={{
+        ...base,
+        colors: {
+          ...base.colors,
+          primary: theme.primary,
+          background: theme.background,
+          card: theme.background,
+          text: theme.foreground,
+          border: theme.border,
+        },
+      }}
+    >
+      {children}
+      <StatusBar style={theme.dark ? "light" : "dark"} />
+    </ThemeProvider>
+  );
+}
+
 export default function RootLayout() {
   const [queryClient] = useState(createQueryClient);
-  const scheme = useColorScheme();
-  const theme = scheme === "dark" ? DARK : LIGHT;
-  const base = scheme === "dark" ? DarkTheme : DefaultTheme;
+  const [fontsLoaded, fontError] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold });
 
   // Data dimuat ulang saat app kembali dibuka dari latar belakang.
   useEffect(() => {
@@ -62,26 +89,16 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <ThemeProvider
-          value={{
-            ...base,
-            colors: {
-              ...base.colors,
-              primary: theme.primary,
-              background: theme.background,
-              card: theme.background,
-              text: theme.text,
-              border: theme.border,
-            },
-          }}
-        >
-          <ToastProvider>
-            <RootNavigator />
-            <StatusBar style="auto" />
-          </ToastProvider>
-        </ThemeProvider>
-      </AuthProvider>
+      <PreferencesProvider>
+        <AuthProvider>
+          <Themed>
+            <ToastProvider>
+              {/* Font gagal dimuat tetap lanjut (fallback font sistem), sama dengan fallback web. */}
+              <RootNavigator fontsReady={fontsLoaded || Boolean(fontError)} />
+            </ToastProvider>
+          </Themed>
+        </AuthProvider>
+      </PreferencesProvider>
     </QueryClientProvider>
   );
 }

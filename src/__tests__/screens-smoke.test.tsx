@@ -1,7 +1,6 @@
-import { Stack } from "expo-router";
 import { renderRouter, screen } from "expo-router/testing-library";
 import type { ReactNode } from "react";
-import type { Category, Home, MonthlySummary, Transaction, Wallet } from "@/lib/api";
+import type { Category, Goal, Home, MonthlySummary, Profile, Transaction, Wallet } from "@/lib/api";
 
 // Smoke test: setiap layar setelah login dirender dengan data contoh (bentuk sama dengan /api/v1)
 // tanpa crash dan tanpa console.error. Tab bar native diganti Stack (tidak bisa dirender di Jest).
@@ -14,6 +13,7 @@ jest.mock("@/lib/auth", () => ({
     signIn: jest.fn(),
     signUp: jest.fn(),
     signOut: jest.fn(),
+    signOutEverywhere: jest.fn(),
   }),
   authErrorMessage: () => "error",
 }));
@@ -24,25 +24,48 @@ const transactions: Transaction[] = [
   {
     id: 10, type: "expense", amount: 25_000, transactionDate: "2026-11-25", note: "makan siang",
     fromWalletId: 1, fromWalletName: "BCA Utama", fromWalletType: "bank", toWalletId: null, toWalletName: null, toWalletType: null,
-    categoryId: 3, categoryName: "Makan",
+    categoryId: 3, categoryName: "Makan", categoryIcon: "BowlRice",
   },
   {
     id: 11, type: "transfer", amount: 100_000, transactionDate: "2026-11-24", note: null,
     fromWalletId: 1, fromWalletName: "BCA Utama", fromWalletType: "bank", toWalletId: 2, toWalletName: "Dompet harian", toWalletType: "cash",
-    categoryId: null, categoryName: null,
+    categoryId: null, categoryName: null, categoryIcon: null,
   },
   {
     id: 12, type: "adjustment", amount: 50_000, transactionDate: "2026-11-01", note: null,
     fromWalletId: null, fromWalletName: null, fromWalletType: null, toWalletId: 2, toWalletName: "Dompet harian", toWalletType: "cash",
-    categoryId: null, categoryName: null,
+    categoryId: null, categoryName: null, categoryIcon: null,
   },
 ];
 const summary: MonthlySummary = {
   income: 5_000_000,
   expense: 25_000,
   net: 4_975_000,
-  expenseByCategory: [{ type: "expense", categoryId: 3, categoryName: "Makan", total: 25_000, share: 1 }],
-  incomeByCategory: [{ type: "income", categoryId: 1, categoryName: "Gaji", total: 5_000_000, share: 1 }],
+  expenseByCategory: [{ type: "expense", categoryId: 3, categoryName: "Makan", categoryIcon: "BowlRice", total: 25_000, share: 1 }],
+  incomeByCategory: [{ type: "income", categoryId: 1, categoryName: "Gaji", categoryIcon: "Briefcase", total: 5_000_000, share: 1 }],
+};
+const goal: Goal = {
+  id: 7,
+  name: "Dana darurat",
+  targetAmount: 10_000_000,
+  deadline: "2027-06-30",
+  walletId: 2,
+  walletName: "Dompet harian",
+  walletType: "savings",
+  walletBrand: null,
+  balance: 4_200_000,
+  achievedOn: null,
+  archived: false,
+  progress: { share: 0.42, remaining: 5_800_000, achieved: false, daysLeft: 217 },
+};
+const profile: Profile = {
+  id: "u1",
+  name: "Budi",
+  email: "budi@contoh.id",
+  timezone: "Asia/Jakarta",
+  emailVerified: false,
+  avatarColor: null,
+  joinedOn: "2026-11-25",
 };
 const home: Home = {
   today: "2026-11-25",
@@ -53,17 +76,30 @@ const home: Home = {
   wallets: [minus, wallet],
   summary,
   recentTransactions: transactions,
+  goals: [goal],
 };
-const categories: Category[] = [{ id: 3, name: "Makan", kind: "expense", usageCount: 4 }];
+const categories: Category[] = [{ id: 3, name: "Makan", kind: "expense", icon: "BowlRice", usageCount: 4 }];
 
 function apiResponse(path: string): unknown {
   const url = new URL(path, "https://contoh.test");
   const routes: Record<string, unknown> = {
     "/api/v1/home": home,
-    "/api/v1/wallets": { wallets: [wallet, minus] },
+    "/api/v1/wallets": { wallets: url.searchParams.get("archived") ? [] : [wallet, minus] },
+    "/api/v1/goals": { today: "2026-11-25", goals: [goal], archived: [] },
+    "/api/v1/profile": { profile },
     "/api/v1/wallets/1": { wallet, transactions },
     "/api/v1/categories": { categories },
-    "/api/v1/transactions": { month: "2026-11", transactions },
+    "/api/v1/transactions": {
+      month: "2026-11",
+      today: "2026-11-25",
+      transactions,
+      totals: { income: 0, expense: 25_000 },
+      days: [
+        { date: "2026-11-25", label: "Hari ini · Rab, 25 Nov", net: -25_000 },
+        { date: "2026-11-24", label: "Kemarin · Sel, 24 Nov", net: 0 },
+        { date: "2026-11-01", label: "Min, 1 Nov", net: 0 },
+      ],
+    },
     "/api/v1/transactions/10": { transaction: transactions[0] },
     "/api/v1/summary": { month: "2026-11", summary },
   };
@@ -71,7 +107,8 @@ function apiResponse(path: string): unknown {
   return routes[url.pathname];
 }
 
-const overrides = { "(app)/(tabs)/_layout": () => <Stack /> };
+// Tab bar asli (BottomNav) ikut dirender.
+const overrides = {};
 let consoleError: jest.SpyInstance;
 
 beforeEach(() => {
@@ -88,15 +125,16 @@ afterEach(() => {
 });
 
 const cases: [string, string | RegExp][] = [
-  ["/", /makan siang/],
-  ["/transactions", /makan siang/],
+  ["/", "makan siang"],
+  ["/transactions", "Hari ini · Rab, 25 Nov"],
+  ["/goals", "Dana darurat"],
+  ["/profile", "Bergabung 25 Nov 2026"],
   ["/wallets", "Dompet harian"],
   ["/summary", "Gaji"],
-  ["/transaction/new", "BCA Utama"],
-  ["/transaction/10", "Makan"],
-  ["/wallet/new", "Nama dompet"],
-  ["/wallet/1", "Bank · saldo"],
-  ["/profile", "Budi"],
+  ["/transaction/new", "Catat transaksi"],
+  ["/transaction/10", "Simpan perubahan"],
+  ["/wallet/new", "Tambah dompet"],
+  ["/wallet/1", "Saldo di aplikasi ini"],
 ];
 
 describe.each(cases)("layar %s", (url, expected) => {

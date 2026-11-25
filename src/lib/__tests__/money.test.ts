@@ -1,4 +1,4 @@
-import { formatAmountInput, formatRupiah, formatSigned, groupThousands, parseAmountInput } from "@/lib/money";
+import { formatAmountInput, formatPercent, formatRupiah, formatSigned, groupThousands, parseAmountInput } from "@/lib/money";
 
 // Format harus sama dengan web Lajur (lib/domain/money.ts): "Rp 25.000", minus "−Rp 2.500".
 describe("format rupiah", () => {
@@ -23,5 +23,14 @@ describe("format rupiah", () => {
     expect(formatAmountInput("")).toBe("");
     expect(parseAmountInput("1.250.000")).toBe(1250000);
     expect(parseAmountInput("")).toBeNull();
+  });
+});
+
+describe("formatPercent", () => {
+  it("sama dengan Intl id-ID percent web (maks. 1 desimal, koma)", () => {
+    expect(formatPercent(0.691)).toBe("69,1%");
+    expect(formatPercent(1)).toBe("100%");
+    expect(formatPercent(0.025)).toBe("2,5%");
+    expect(formatPercent(0.0244)).toBe("2,4%");
   });
 });

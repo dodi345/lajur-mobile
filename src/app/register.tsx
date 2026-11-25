@@ -1,8 +1,11 @@
+import { router } from "expo-router";
 import { useState } from "react";
-import { FormScreen } from "@/components/screen";
-import { AppText, Button, TextField } from "@/components/ui";
+import { StyleSheet, View } from "react-native";
+import { AuthShell } from "@/components/auth-shell";
+import { AppText, Button, FormField, FormMessage, Input, TextLink } from "@/components/ui";
 import { authErrorMessage, useAuth } from "@/lib/auth";
 
+// Daftar = /register web. Validasi akhir di server (Better Auth); pesan dalam bahasa Indonesia.
 export default function RegisterScreen() {
   const { signUp } = useAuth();
   const [name, setName] = useState("");
@@ -12,12 +15,8 @@ export default function RegisterScreen() {
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
-    if (!name.trim() || !email.trim()) {
-      setError("Isi nama dan email.");
-      return;
-    }
-    if (password.length < 8) {
-      setError("Password minimal 8 karakter.");
+    if (!name.trim() || !email.trim() || !password) {
+      setError("Isi nama, email, dan password.");
       return;
     }
     setBusy(true);
@@ -31,34 +30,52 @@ export default function RegisterScreen() {
   };
 
   return (
-    <FormScreen>
-      <AppText variant="title">Daftar akun</AppText>
-      <AppText tone="muted">Kategori pengeluaran dan pemasukan dasar langsung disiapkan.</AppText>
-      <TextField label="Nama" value={name} onChangeText={setName} autoComplete="name" textContentType="name" />
-      <TextField
-        label="Email"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        autoComplete="email"
-        keyboardType="email-address"
-        textContentType="emailAddress"
-      />
-      <TextField
-        label="Password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        autoComplete="new-password"
-        textContentType="newPassword"
-        hint="Minimal 8 karakter."
-      />
-      {error && (
-        <AppText tone="destructive" accessibilityRole="alert">
-          {error}
-        </AppText>
-      )}
-      <Button label="Daftar" onPress={submit} loading={busy} />
-    </FormScreen>
+    <AuthShell
+      title="Buat akun"
+      subtitle="Datamu hanya bisa dilihat oleh akunmu sendiri."
+      footer={
+        <View style={styles.footer}>
+          <AppText size={14} lineHeight={20} tone="mutedForeground">
+            Sudah punya akun?
+          </AppText>
+          <TextLink label="Masuk" onPress={() => (router.canGoBack() ? router.back() : router.replace("/login"))} />
+        </View>
+      }
+    >
+      <View style={styles.form}>
+        {error ? <FormMessage message={error} /> : null}
+        <FormField label="Nama">
+          <Input value={name} onChangeText={setName} placeholder="Nama kamu" autoComplete="name" accessibilityLabel="Nama" />
+        </FormField>
+        <FormField label="Email">
+          <Input
+            value={email}
+            onChangeText={setEmail}
+            placeholder="nama@email.com"
+            autoCapitalize="none"
+            autoComplete="email"
+            keyboardType="email-address"
+            accessibilityLabel="Email"
+          />
+        </FormField>
+        <FormField label="Password" hint="Minimal 8 karakter.">
+          <Input
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Buat password"
+            secureTextEntry
+            autoComplete="new-password"
+            accessibilityLabel="Password"
+          />
+        </FormField>
+        <Button label={busy ? "Membuat akun…" : "Daftar"} big onPress={() => void submit()} disabled={busy} style={styles.submit} />
+      </View>
+    </AuthShell>
   );
 }
+
+const styles = StyleSheet.create({
+  form: { gap: 16 },
+  submit: { marginTop: 8 },
+  footer: { flexDirection: "row", alignItems: "center", gap: 4 },
+});

@@ -2,11 +2,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   request,
   type Category,
+  type Goal,
   type Home,
   type MonthlySummary,
+  type Profile,
   type SaveResult,
   type Transaction,
   type TransactionInput,
+  type TransactionList,
   type Wallet,
 } from "@/lib/api";
 
@@ -17,10 +20,10 @@ export function useHome() {
   return useQuery({ queryKey: ["home"], queryFn: () => request<Home>("/api/v1/home") });
 }
 
-export function useWallets() {
+export function useWallets(archived = false) {
   return useQuery({
-    queryKey: ["wallets"],
-    queryFn: async () => (await request<{ wallets: Wallet[] }>("/api/v1/wallets")).wallets,
+    queryKey: ["wallets", archived],
+    queryFn: async () => (await request<{ wallets: Wallet[] }>(`/api/v1/wallets${archived ? "?archived=1" : ""}`)).wallets,
   });
 }
 
@@ -39,16 +42,17 @@ export function useCategories(kind: "expense" | "income") {
   });
 }
 
-export type TransactionFilter = { month?: string; type?: Transaction["type"]; walletId?: number };
+export type TransactionFilter = { month?: string; type?: Transaction["type"]; walletId?: number; categoryId?: number };
 
 export function useTransactions(filter: TransactionFilter) {
   const params = new URLSearchParams();
   if (filter.month) params.set("month", filter.month);
   if (filter.type) params.set("type", filter.type);
   if (filter.walletId) params.set("walletId", String(filter.walletId));
+  if (filter.categoryId) params.set("categoryId", String(filter.categoryId));
   return useQuery({
-    queryKey: ["transactions", filter.month ?? null, filter.type ?? null, filter.walletId ?? null],
-    queryFn: () => request<{ month: string; transactions: Transaction[] }>(`/api/v1/transactions?${params}`),
+    queryKey: ["transactions", filter.month ?? null, filter.type ?? null, filter.walletId ?? null, filter.categoryId ?? null],
+    queryFn: () => request<TransactionList>(`/api/v1/transactions?${params}`),
   });
 }
 
@@ -64,6 +68,20 @@ export function useSummary(month: string | undefined) {
     queryKey: ["summary", month ?? null],
     queryFn: () =>
       request<{ month: string; summary: MonthlySummary }>(`/api/v1/summary${month ? `?month=${month}` : ""}`),
+  });
+}
+
+export function useGoals() {
+  return useQuery({
+    queryKey: ["goals"],
+    queryFn: () => request<{ today: string; goals: Goal[]; archived: Goal[] }>("/api/v1/goals"),
+  });
+}
+
+export function useProfile() {
+  return useQuery({
+    queryKey: ["profile"],
+    queryFn: async () => (await request<{ profile: Profile }>("/api/v1/profile")).profile,
   });
 }
 
@@ -101,7 +119,12 @@ export function useRestoreTransaction() {
   });
 }
 
-export type WalletInput = { name: string; type: "cash" | "bank" | "ewallet" | "savings"; openingBalance: number | null };
+export type WalletInput = {
+  name: string;
+  type: "cash" | "bank" | "ewallet" | "savings";
+  brand: string | null;
+  openingBalance: number | null;
+};
 
 export function useCreateWallet() {
   const refresh = useRefreshAll();

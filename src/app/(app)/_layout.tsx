@@ -1,17 +1,22 @@
 import { Stack } from "expo-router";
 
-// Layar modal (catat transaksi, tambah dompet) selalu punya tab di bawahnya, juga kalau dibuka langsung.
+// Halaman setelah login. Tab (Beranda, Transaksi, Target, Akun) di bawah; Dompet, Ringkasan, dan detail
+// dompet didorong di atasnya (header sendiri seperti web). Form tampil sebagai bottom sheet
+// (transparentModal; animasi geser-naik dibuat sendiri di components/sheet.tsx).
 export const unstable_settings = { anchor: "(tabs)" };
+
+const SHEET = { presentation: "transparentModal", animation: "none", contentStyle: { backgroundColor: "transparent" } } as const;
 
 export default function AppLayout() {
   return (
-    <Stack screenOptions={{ headerShadowVisible: false }}>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="transaction/new" options={{ title: "Catat transaksi", presentation: "modal" }} />
-      <Stack.Screen name="transaction/[id]" options={{ title: "Transaksi" }} />
-      <Stack.Screen name="wallet/new" options={{ title: "Tambah dompet", presentation: "modal" }} />
-      <Stack.Screen name="wallet/[id]" options={{ title: "Dompet" }} />
-      <Stack.Screen name="profile" options={{ title: "Akun" }} />
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="wallets" />
+      <Stack.Screen name="wallet/[id]" />
+      <Stack.Screen name="summary" />
+      <Stack.Screen name="transaction/new" options={SHEET} />
+      <Stack.Screen name="transaction/[id]" options={SHEET} />
+      <Stack.Screen name="wallet/new" options={SHEET} />
     </Stack>
   );
 }

@@ -1,4 +1,4 @@
-import { dayLabel, displayDate, groupLabel, isIsoDate, monthLabel, parseDisplayDate, shiftDay, shiftMonth } from "@/lib/date";
+import { dayLabel, displayDate, groupLabel, isIsoDate, monthLabel, parseDisplayDate, shiftDay, shiftMonth, shortDate } from "@/lib/date";
 
 describe("tanggal", () => {
   it("geser hari/bulan lintas batas bulan dan tahun", () => {
@@ -23,5 +23,12 @@ describe("tanggal", () => {
     expect(parseDisplayDate("2026-11-08")).toBeNull();
     expect(displayDate("2026-11-08")).toBe("08/11/2026");
     expect(isIsoDate("2026-02-30")).toBe(false);
+  });
+});
+
+describe("shortDate", () => {
+  it("12 Agu 2026 (sama dengan formatShortDate web)", () => {
+    expect(shortDate("2026-08-12")).toBe("12 Agu 2026");
+    expect(shortDate("2027-06-30")).toBe("30 Jun 2027");
   });
 });
