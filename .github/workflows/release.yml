@@ -104,7 +104,13 @@ jobs:
           echo "apksigner: $APKSIGNER (versi $("$APKSIGNER" --version))"
           # Isi sertifikat (nama + sidik jari) bukan rahasia; dicetak supaya kegagalan mudah dibaca.
           "$APKSIGNER" verify --print-certs "$APK" | tee certs.txt
-          ACTUAL=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' certs.txt)
+          # Format baris beda antar versi apksigner ("Signer #1 certificate ..." / "V2 Signer: certificate ...").
+          # Semua skema tanda tangan harus memakai satu sertifikat yang sama.
+          ACTUAL=$(sed -n 's/^.*certificate SHA-256 digest: //p' certs.txt | sort -u)
+          if [ "$(printf '%s\n' "$ACTUAL" | grep -c .)" -gt 1 ]; then
+            echo "::error::APK ditandatangani lebih dari satu sertifikat"
+            exit 1
+          fi
           EXPECTED=$(keytool -list -v -keystore "$LAJUR_KEYSTORE_PATH" -storepass:env LAJUR_KEYSTORE_PASSWORD -alias lajur \
             | sed -n 's/^[[:space:]]*SHA256: //p' | tr -d ':' | tr 'A-F' 'a-f')
           echo "Sertifikat APK : ${ACTUAL:-(kosong)}"
