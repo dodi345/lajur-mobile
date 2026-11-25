@@ -18,6 +18,7 @@ Selalu balas dalam **Bahasa Indonesia**. Panduan Expo umum ada di `AGENTS.md` (d
 - Jest (`jest-expo`) + `@testing-library/react-native` untuk test
 - Pasang paket dengan `npx expo install` (versi cocok dengan SDK), bukan `npm install <paket>`
 - Tidak ada `android/` atau `ios/` di repo (dibuat `expo prebuild` saat build)
+- Rilis: tag `vX.Y.Z` → `.github/workflows/release.yml` membangun APK bertanda tangan di GitHub Actions (lihat README). Jangan ubah alur penandatanganan (`plugins/with-release-signing.js`) tanpa izin
 
 ## Aturan UI
 

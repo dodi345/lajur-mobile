@@ -55,6 +55,20 @@ src/lib/            api (klien /api/v1 + tipe), auth (sesi, SecureStore), querie
 - Tidak ada rahasia di repo ini. Keystore penanda tangan APK (tahap berikutnya) hanya di password manager dan
   GitHub Secrets.
 
-## Membuat APK
+## Membuat rilis (APK)
 
-Belum (tahap 3): APK bertanda tangan dibangun di GitHub Actions, lalu disediakan di halaman unduh.
+APK dibangun di GitHub Actions, tidak di laptop atau server. Caranya:
+
+```bash
+git tag v1.0.1 && git push origin v1.0.1
+```
+
+Workflow `Rilis APK` lalu: menjalankan lint/typecheck/test → `expo prebuild` → Gradle `assembleRelease` (arm64 + armv7)
+→ memastikan APK ditandatangani kunci Lajur → membuat GitHub Release berisi `lajur.apk` + checksum (±15–20 menit).
+
+- Nomor versi hanya dari tag: `v1.2.3` → versi 1.2.3, versionCode 10203. Tag berikutnya harus selalu lebih besar,
+  kalau tidak Android menolak update.
+- Unduhan versi terbaru selalu di `https://github.com/dodi345/lajur-mobile/releases/latest/download/lajur.apk`.
+- Kunci tanda tangan (keystore PKCS12, alias `lajur`) hanya ada di password manager dan di secret GitHub
+  `ANDROID_KEYSTORE_BASE64` + `ANDROID_KEYSTORE_PASSWORD`. `plugins/with-release-signing.js` memasangnya ke build;
+  tanpa variabel itu (build lokal) rilis memakai kunci debug. **Kunci hilang = update tidak bisa menimpa app lama.**

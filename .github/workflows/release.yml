@@ -1,0 +1,129 @@
+name: Rilis APK
+
+# Tag vX.Y.Z → cek kode → APK bertanda tangan kunci Lajur → GitHub Release berisi lajur.apk.
+# Nomor versi hanya dari tag: v1.2.3 → versionName 1.2.3, versionCode 10203 (harus selalu naik).
+# Secret wajib: ANDROID_KEYSTORE_BASE64 (keystore PKCS12, alias "lajur") dan ANDROID_KEYSTORE_PASSWORD.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    uses: ./.github/workflows/ci.yml
+
+  apk:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      LAJUR_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: Versi dari tag
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if ! [[ "$VERSION" =~ ^([0-9]+)\.([0-9]{1,2})\.([0-9]{1,2})$ ]]; then
+            echo "::error::Tag harus berbentuk vX.Y.Z (Y dan Z maksimal 99), bukan $GITHUB_REF_NAME"
+            exit 1
+          fi
+          CODE=$(( 10#${BASH_REMATCH[1]} * 10000 + 10#${BASH_REMATCH[2]} * 100 + 10#${BASH_REMATCH[3]} ))
+          VERSION="$VERSION" CODE="$CODE" node -e '
+            const fs = require("fs");
+            const app = JSON.parse(fs.readFileSync("app.json", "utf8"));
+            app.expo.version = process.env.VERSION;
+            app.expo.android.versionCode = Number(process.env.CODE);
+            fs.writeFileSync("app.json", JSON.stringify(app, null, 2) + "\n");
+          '
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Versi $VERSION (versionCode $CODE)"
+
+      - name: Pasang kunci tanda tangan
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$LAJUR_KEYSTORE_PASSWORD" ]; then
+            echo "::error::Secret ANDROID_KEYSTORE_BASE64 dan ANDROID_KEYSTORE_PASSWORD wajib diisi (Settings → Secrets and variables → Actions)"
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/lajur-release.keystore"
+          echo "LAJUR_KEYSTORE_PATH=$RUNNER_TEMP/lajur-release.keystore" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Prebuild (folder android/ dibuat ulang, tidak di-commit)
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build APK rilis
+        working-directory: android
+        # Hanya arsitektur HP sungguhan (64 + 32 bit ARM): APK jauh lebih kecil dan build lebih cepat.
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+
+      - name: Pastikan APK ditandatangani kunci Lajur (bukan kunci debug)
+        id: signature
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+          ACTUAL=$("$APKSIGNER" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          EXPECTED=$(keytool -list -v -keystore "$LAJUR_KEYSTORE_PATH" -storepass:env LAJUR_KEYSTORE_PASSWORD -alias lajur \
+            | sed -n 's/^[[:space:]]*SHA256: //p' | tr -d ':' | tr 'A-F' 'a-f')
+          if [ -z "$ACTUAL" ] || [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::Sertifikat APK tidak sama dengan kunci Lajur"
+            exit 1
+          fi
+          echo "sha256=$ACTUAL" >> "$GITHUB_OUTPUT"
+          mkdir -p release
+          cp "$APK" release/lajur.apk
+          (cd release && sha256sum lajur.apk > lajur.apk.sha256)
+          ls -lh release
+
+      - name: Hapus kunci dari runner
+        if: always()
+        run: rm -f "$RUNNER_TEMP/lajur-release.keystore"
+
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          CERT_SHA256: ${{ steps.signature.outputs.sha256 }}
+        run: |
+          cat > notes.md <<NOTES
+          Lajur untuk Android, versi $VERSION.
+
+          **Cara pasang:** unduh \`lajur.apk\` dari HP Android, buka filenya, lalu izinkan browser memasang
+          aplikasi kalau diminta. Masuk dengan akun Lajur yang sama dengan web; datanya sama.
+
+          Sidik jari sertifikat (SHA-256): \`$CERT_SHA256\`
+          NOTES
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" release/lajur.apk release/lajur.apk.sha256 --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" release/lajur.apk release/lajur.apk.sha256 \
+              --verify-tag --title "Lajur $VERSION" --notes-file notes.md
+          fi
