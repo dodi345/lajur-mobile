@@ -41,3 +41,6 @@ example
 # generated native folders
 /ios
 /android
+
+# Keystore penanda tangan APK: hanya di password manager + GitHub Secrets, tidak pernah di repo
+*.keystore

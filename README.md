@@ -1,56 +1,60 @@
-# Welcome to your Expo app 👋
+# Lajur untuk Android
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+App Android native (React Native + Expo SDK 58) untuk **Lajur - Catat Uangmu**. Data dan aturan bisnis
+ada di server Lajur (repo `money-management`, API `/api/v1`); app ini hanya tampilan native-nya.
 
-## Get started
+Versi 1: masuk/daftar, Beranda (kekayaan bersih, ringkasan bulan ini, dompet, transaksi terakhir),
+transaksi (daftar per bulan, catat, ubah, hapus + Batal), dompet (daftar, tambah, detail), ringkasan
+bulanan, akun + keluar. Target tabungan, utang & piutang, kategori, ekspor, dan bot Telegram tetap di web.
 
-1. Install dependencies
+## Menjalankan saat pengembangan
 
+1. Pasang **Expo Go** di HP Android (Play Store).
+2. Di laptop:
    ```bash
    npm install
-   ```
-
-2. Start the app
-
-   ```bash
    npx expo start
    ```
+3. Scan QR dari terminal dengan Expo Go (HP dan laptop di Wi-Fi yang sama). Perubahan kode langsung muncul.
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+Secara bawaan app memakai server produksi `https://lajur.stackfolio.web.id`. Untuk memakai Lajur yang
+berjalan di laptop:
 
 ```bash
-npm run reset-project
+# terminal 1 (repo money-management)
+npm run dev -- -H 0.0.0.0
+# terminal 2 (repo ini); ganti dengan IP laptop di Wi-Fi (ip -4 addr)
+EXPO_PUBLIC_API_URL=http://192.168.1.10:3000 npx expo start
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+Kalau HP tidak bisa menjangkau laptop (firewall/Wi-Fi tamu): `npx expo start --tunnel`.
 
-### Other setup steps
+## Perintah
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+```bash
+npm run typecheck   # tsc --noEmit
+npm run lint        # expo lint
+npm test            # jest (jest-expo): format rupiah/tanggal, klien API, sesi login
+npx expo-doctor     # cek kecocokan dependency dengan SDK
+```
 
-## Learn more
+## Struktur
 
-To learn more about developing your project with Expo, look at the following resources:
+```
+src/app/            layar (expo-router): (auth)/ masuk & daftar, (app)/(tabs)/ empat tab, transaction/, wallet/, profile
+src/components/     ui (teks, tombol, input, chip), finance (baris transaksi/dompet, ringkasan), form transaksi, toast
+src/lib/            api (klien /api/v1 + tipe), auth (sesi, SecureStore), queries (TanStack Query), money, date, theme
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Keamanan
 
-## Join the community
+- Login memakai endpoint Better Auth biasa; server mengirim token sesi di header `set-auth-token`
+  (plugin `bearer`). Token disimpan terenkripsi di Android Keystore (`expo-secure-store`) dan dikirim sebagai
+  `Authorization: Bearer`. Token = sesi biasa: terlihat dan bisa dikeluarkan dari web (Profil → Perangkat yang login).
+- Server menolak token → app langsung kembali ke layar Masuk.
+- Tidak ada rahasia di repo ini. Keystore penanda tangan APK (tahap berikutnya) hanya di password manager dan
+  GitHub Secrets.
 
-Join our community of developers creating universal apps.
+## Membuat APK
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Belum (tahap 3): APK bertanda tangan dibangun di GitHub Actions, lalu disediakan di halaman unduh.
