@@ -87,12 +87,28 @@ jobs:
 
       - name: Pastikan APK ditandatangani kunci Lajur (bukan kunci debug)
         id: signature
+        shell: bash
         run: |
           APK=android/app/build/outputs/apk/release/app-release.apk
-          APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
-          ACTUAL=$("$APKSIGNER" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          # apksigner dari build-tools terbaru bisa butuh Java lebih baru dari Java untuk build (17).
+          export JAVA_HOME="${JAVA_HOME_21_X64:-$JAVA_HOME}"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          APKSIGNER=""
+          for dir in $(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -rV); do
+            if "${dir}apksigner" --version > /dev/null 2>&1; then APKSIGNER="${dir}apksigner"; break; fi
+          done
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner di build-tools tidak bisa dijalankan"
+            exit 1
+          fi
+          echo "apksigner: $APKSIGNER (versi $("$APKSIGNER" --version))"
+          # Isi sertifikat (nama + sidik jari) bukan rahasia; dicetak supaya kegagalan mudah dibaca.
+          "$APKSIGNER" verify --print-certs "$APK" | tee certs.txt
+          ACTUAL=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' certs.txt)
           EXPECTED=$(keytool -list -v -keystore "$LAJUR_KEYSTORE_PATH" -storepass:env LAJUR_KEYSTORE_PASSWORD -alias lajur \
             | sed -n 's/^[[:space:]]*SHA256: //p' | tr -d ':' | tr 'A-F' 'a-f')
+          echo "Sertifikat APK : ${ACTUAL:-(kosong)}"
+          echo "Kunci Lajur    : ${EXPECTED:-(kosong)}"
           if [ -z "$ACTUAL" ] || [ "$ACTUAL" != "$EXPECTED" ]; then
             echo "::error::Sertifikat APK tidak sama dengan kunci Lajur"
             exit 1
