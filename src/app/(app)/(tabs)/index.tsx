@@ -6,12 +6,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CategoryBreakdown, GoalCard, SummaryStats, TransactionRow, WalletCard } from "@/components/finance";
 import { Icon } from "@/components/icon";
 import { NAV_SPACE } from "@/components/screen";
+import { useToast } from "@/components/toast";
 import { AppText, Button, ErrorState, InsetCard, Loading, SectionHeader } from "@/components/ui";
 import { API_URL } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { monthLabel } from "@/lib/date";
 import { formatRupiah } from "@/lib/money";
-import { useHome } from "@/lib/queries";
+import { useHome, useProfile, useResendVerification } from "@/lib/queries";
 import { RADIUS, TOUCH, useTheme } from "@/lib/theme";
 
 // Beranda = app/(app)/page.tsx web: blok hero ungu tetap di atas (sapaan, kekayaan bersih, pinjaman)
@@ -21,6 +22,7 @@ export default function HomeScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const home = useHome();
+  const profile = useProfile();
   const { user } = useAuth();
   // Hero "sticky": ikut di dalam area gulir tapi digeser balik sejauh guliran, lembar konten menutupinya.
   const [scrollY] = useState(() => new Animated.Value(0));
@@ -105,7 +107,8 @@ export default function HomeScreen() {
             <ErrorState message={home.error.message} onRetry={() => void home.refetch()} />
           ) : (
             <>
-              {user && !user.emailVerified ? <EmailBanner email={user.email} /> : null}
+              {/* Banner konfirmasi email: bukan untuk akun demo (BR-33), sama dengan web. */}
+              {user && !user.emailVerified && profile.data && !profile.data.demo ? <EmailBanner email={user.email} /> : null}
 
               {data!.walletCount === 0 ? (
                 <Pressable
@@ -224,6 +227,8 @@ function Greeting({ name }: { name: string }) {
 
 function EmailBanner({ email }: { email: string }) {
   const theme = useTheme();
+  const toast = useToast();
+  const resend = useResendVerification();
   return (
     <View style={[styles.banner, { borderColor: theme.primary30, backgroundColor: theme.primary5 }]}>
       <View style={styles.bannerRow}>
@@ -241,11 +246,17 @@ function EmailBanner({ email }: { email: string }) {
           </AppText>
         </View>
       </View>
-      {/* Kirim ulang dibatasi di server (BR-30) dan belum ada di API app: lewat halaman Akun web. */}
+      {/* US-33: jeda 60 detik dijaga di server (BR-30). */}
       <Button
-        label="Kirim ulang email"
+        label={resend.isPending ? "Mengirim…" : "Kirim ulang email"}
         variant="outline"
-        onPress={() => void Linking.openURL(`${API_URL}/profile`)}
+        disabled={resend.isPending}
+        onPress={() =>
+          resend.mutate(undefined, {
+            onSuccess: (result) => toast({ message: result.message, type: "success" }),
+            onError: (error) => toast({ message: error.message, type: "error" }),
+          })
+        }
         style={{ backgroundColor: theme.background }}
       />
     </View>

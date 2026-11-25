@@ -30,6 +30,12 @@ type AuthContextValue = {
   signOut: () => Promise<void>;
   /** Keluar dari semua perangkat (semua sesi akun ini dicabut di server). */
   signOutEverywhere: () => Promise<void>;
+  /** "Coba akun demo": data contoh dibuat ulang di server lalu langsung masuk. */
+  signInDemo: () => Promise<void>;
+  /** Ganti password mencabut semua sesi; server memberi token baru untuk perangkat ini (BR-23). */
+  replaceToken: (token: string) => Promise<void>;
+  /** Setelah akun dihapus: buang token di HP ini (sesi di server sudah ikut terhapus). */
+  forgetSession: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -134,14 +140,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await clearLocal();
   }, [clearLocal]);
 
+  const signInDemo = useCallback(async () => {
+    const { headers } = await rawRequest("/api/v1/auth/demo", { method: "POST", body: {} });
+    await acceptSession(headers);
+  }, [acceptSession]);
+
+  const replaceToken = useCallback(async (next: string) => {
+    await tokenStore.set(next);
+    setApiToken(next);
+  }, []);
+
   const signOutEverywhere = useCallback(async () => {
     await rawRequest("/api/auth/revoke-sessions", { method: "POST", body: {} }).catch(() => {});
     await clearLocal();
   }, [clearLocal]);
 
   const value = useMemo(
-    () => ({ status, user, signIn, signUp, signOut, signOutEverywhere }),
-    [status, user, signIn, signUp, signOut, signOutEverywhere],
+    () => ({ status, user, signIn, signUp, signOut, signOutEverywhere, signInDemo, replaceToken, forgetSession: clearLocal }),
+    [status, user, signIn, signUp, signOut, signOutEverywhere, signInDemo, replaceToken, clearLocal],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

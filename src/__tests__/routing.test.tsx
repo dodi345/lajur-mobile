@@ -10,7 +10,7 @@ let mockStatus: "signedIn" | "signedOut" = "signedOut";
 
 jest.mock("@/lib/auth", () => ({
   AuthProvider: ({ children }: { children: ReactNode }) => children,
-  useAuth: () => ({ status: mockStatus, user: null, signIn: jest.fn(), signUp: jest.fn(), signOut: jest.fn() }),
+  useAuth: () => ({ status: mockStatus, user: null, signIn: jest.fn(), signUp: jest.fn(), signOut: jest.fn(), signInDemo: jest.fn() }),
   authErrorMessage: () => "error",
 }));
 
@@ -36,6 +36,13 @@ describe("navigasi sesuai status login", () => {
     mockStatus = "signedOut";
     const router = await open("/register");
     expect(router.getPathname()).toBe("/register");
+  });
+
+  it("belum login: Lupa password bisa dibuka dari app (tanpa web)", async () => {
+    mockStatus = "signedOut";
+    const router = await open("/forgot-password");
+    expect(router.getPathname()).toBe("/forgot-password");
+    expect(screen.getByText("Kirim tautan reset")).toBeOnTheScreen();
   });
 
   it("belum login: halaman yang butuh login dialihkan ke Masuk", async () => {

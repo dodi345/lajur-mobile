@@ -25,11 +25,16 @@ export function setApiToken(value: string | null) {
 }
 
 /** Dipanggil saat server menolak token (401): sesi habis atau dikeluarkan dari web. */
+/** Header Authorization untuk unduhan di luar fetch (mis. Ekspor CSV). */
+export function authHeaders(): Record<string, string> {
+  return token ? { authorization: `Bearer ${token}` } : {};
+}
+
 export function setUnauthorizedHandler(handler: (() => void) | null) {
   onUnauthorized = handler;
 }
 
-type RequestOptions = { method?: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown; signal?: AbortSignal };
+type RequestOptions = { method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; body?: unknown; signal?: AbortSignal };
 
 /** Request mentah; dipakai juga untuk membaca header (token saat masuk). */
 export async function rawRequest(path: string, { method = "GET", body, signal }: RequestOptions = {}) {
@@ -196,3 +201,18 @@ export type TransactionInput = {
 };
 
 export type SaveResult = { id: number; warning?: string };
+
+export type ProfileResponse = {
+  profile: Profile;
+  demo: boolean;
+  counts: { wallets: number; openDebts: number; trash: number; sessions: number };
+  /** ready = bot disiapkan di server; linkedOn = tanggal terhubung (lokal user); active = bot tidak diblokir. */
+  telegram: { ready: boolean; linkedOn: string | null; active: boolean };
+  /** Ringkasan "Yang akan hilang permanen" di layar Hapus akun. */
+  data: { transactions: number; wallets: number; goals: number };
+};
+
+export type DeviceSession = { id: string; label: string; lastActiveAt: string; current: boolean };
+
+/** Hasil aksi akun: pesan sukses (toast) + token baru setelah ganti password. */
+export type MessageResult = { message: string; token?: string };

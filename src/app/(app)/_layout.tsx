@@ -17,6 +17,10 @@ export default function AppLayout() {
       <Stack.Screen name="transaction/new" options={SHEET} />
       <Stack.Screen name="transaction/[id]" options={SHEET} />
       <Stack.Screen name="wallet/new" options={SHEET} />
+      <Stack.Screen name="sessions" />
+      <Stack.Screen name="profile/email" options={SHEET} />
+      <Stack.Screen name="profile/password" options={SHEET} />
+      <Stack.Screen name="profile/delete" options={SHEET} />
     </Stack>
   );
 }

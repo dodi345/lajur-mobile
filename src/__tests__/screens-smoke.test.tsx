@@ -14,6 +14,9 @@ jest.mock("@/lib/auth", () => ({
     signUp: jest.fn(),
     signOut: jest.fn(),
     signOutEverywhere: jest.fn(),
+    signInDemo: jest.fn(),
+    replaceToken: jest.fn(),
+    forgetSession: jest.fn(),
   }),
   authErrorMessage: () => "error",
 }));
@@ -86,7 +89,20 @@ function apiResponse(path: string): unknown {
     "/api/v1/home": home,
     "/api/v1/wallets": { wallets: url.searchParams.get("archived") ? [] : [wallet, minus] },
     "/api/v1/goals": { today: "2026-11-25", goals: [goal], archived: [] },
-    "/api/v1/profile": { profile },
+    "/api/v1/profile": {
+      profile,
+      demo: false,
+      counts: { wallets: 2, openDebts: 0, trash: 1, sessions: 2 },
+      telegram: { ready: true, linkedOn: null, active: false },
+      data: { transactions: 3, wallets: 2, goals: 1 },
+    },
+    "/api/v1/sessions": {
+      timezone: "Asia/Jakarta",
+      sessions: [
+        { id: "s1", label: "Android · Lajur", lastActiveAt: "2026-11-25T07:00:00.000Z", current: true },
+        { id: "s2", label: "Chrome di Linux", lastActiveAt: "2026-11-24T07:05:00.000Z", current: false },
+      ],
+    },
     "/api/v1/wallets/1": { wallet, transactions },
     "/api/v1/categories": { categories },
     "/api/v1/transactions": {
@@ -135,6 +151,10 @@ const cases: [string, string | RegExp][] = [
   ["/transaction/10", "Simpan perubahan"],
   ["/wallet/new", "Tambah dompet"],
   ["/wallet/1", "Saldo di aplikasi ini"],
+  ["/sessions", "Terakhir aktif 24 Nov 2026, 14.05"],
+  ["/profile/email", "Belum dikonfirmasi"],
+  ["/profile/password", "Ulangi password baru"],
+  ["/profile/delete", "3 transaksi · 2 dompet · 1 target"],
 ];
 
 describe.each(cases)("layar %s", (url, expected) => {

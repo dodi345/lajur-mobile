@@ -4,8 +4,10 @@ import {
   type Category,
   type Goal,
   type Home,
+  type DeviceSession,
+  type MessageResult,
   type MonthlySummary,
-  type Profile,
+  type ProfileResponse,
   type SaveResult,
   type Transaction,
   type TransactionInput,
@@ -79,9 +81,71 @@ export function useGoals() {
 }
 
 export function useProfile() {
+  return useQuery({ queryKey: ["profile"], queryFn: () => request<ProfileResponse>("/api/v1/profile") });
+}
+
+export function useSessions() {
   return useQuery({
-    queryKey: ["profile"],
-    queryFn: async () => (await request<{ profile: Profile }>("/api/v1/profile")).profile,
+    queryKey: ["sessions"],
+    queryFn: () => request<{ timezone: string; sessions: DeviceSession[] }>("/api/v1/sessions"),
+  });
+}
+
+// Aksi Akun: logika dan validasi di server (lib/services/account.ts web), sama dengan form web.
+export type ProfileInput = Partial<Record<"name" | "timezone" | "avatarColor", string>>;
+
+export function useUpdateProfile() {
+  const refresh = useRefreshAll();
+  return useMutation({
+    mutationFn: (input: ProfileInput) => request<MessageResult>("/api/v1/profile", { method: "PATCH", body: input }),
+    onSuccess: refresh,
+  });
+}
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (input: { currentPassword: string; newPassword: string; confirmPassword: string }) =>
+      request<MessageResult>("/api/v1/profile/password", { method: "POST", body: input }),
+  });
+}
+
+export function useChangeEmail() {
+  return useMutation({
+    mutationFn: (input: { newEmail: string; password: string }) =>
+      request<MessageResult>("/api/v1/profile/email", { method: "POST", body: input }),
+  });
+}
+
+export function useResendVerification() {
+  return useMutation({
+    mutationFn: () => request<MessageResult>("/api/v1/profile/verification", { method: "POST", body: {} }),
+  });
+}
+
+export function useRevokeOtherSessions() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => request<MessageResult>("/api/v1/sessions/revoke-others", { method: "POST", body: {} }),
+    onSuccess: () => queryClient.invalidateQueries({ predicate: (query) => ["sessions", "profile"].includes(String(query.queryKey[0])) }),
+  });
+}
+
+export function useDeleteAccount() {
+  return useMutation({
+    mutationFn: (input: { password: string; confirmation: string }) =>
+      request<MessageResult>("/api/v1/profile", { method: "DELETE", body: input }),
+  });
+}
+
+export function useTelegramLink() {
+  return useMutation({ mutationFn: () => request<{ url: string }>("/api/v1/telegram", { method: "POST", body: {} }) });
+}
+
+export function useUnlinkTelegram() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => request<MessageResult>("/api/v1/telegram", { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["profile"] }),
   });
 }
 
