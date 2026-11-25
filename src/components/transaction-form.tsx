@@ -1,14 +1,15 @@
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
-import { useState } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useRef, useState } from "react";
+import { Platform, Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance } from "react-native";
 import { categoryIcon } from "@/components/finance";
 import { Icon } from "@/components/icon";
 import { AppText, Button, ChoiceChip, FormField, FormMessage, IconChip, Input, MoneyInput, Segmented } from "@/components/ui";
 import { WalletLogo } from "@/components/wallet-logo";
-import type { Category, Transaction, TransactionInput, Wallet } from "@/lib/api";
+import { useToast } from "@/components/toast";
+import { ApiError, type Category, type Transaction, type TransactionInput, type Wallet } from "@/lib/api";
 import { displayDate, shiftDay } from "@/lib/date";
 import { formatAmountInput, formatRupiah, groupThousands, parseAmountInput } from "@/lib/money";
-import { useCategories, useWallets } from "@/lib/queries";
+import { useCategories, useDeleteTransaction, useSaveTransaction, useWallets } from "@/lib/queries";
 import { RADIUS, useTheme } from "@/lib/theme";
 
 // Form catat/ubah transaksi = web (components/transactions/transaction-form.tsx). Validasi akhir di
@@ -33,8 +34,44 @@ function Legend({ children }: { children: string }) {
   );
 }
 
+/**
+ * Simpan transaksi baru seperti web: toast "Transaksi tersimpan." + "Batal" (menghapus lagi, BR-10);
+ * saldo jadi minus → toast peringatan dengan keterangan (BR-07). Dipakai "Catat transaksi" dan "Tabung ke target".
+ */
+export function useRecordTransaction() {
+  const save = useSaveTransaction();
+  const remove = useDeleteTransaction();
+  const toast = useToast();
+  const fieldErrors = (save.error instanceof ApiError ? save.error.fieldErrors : undefined) ?? {};
+  const record = (input: TransactionInput, onSaved: () => void) =>
+    save.mutate(input, {
+      onSuccess: (result) => {
+        const undo = () =>
+          remove.mutate(result.id, {
+            onSuccess: () => toast({ message: "Transaksi dibatalkan" }),
+            onError: () => toast({ message: "Transaksi tidak bisa dibatalkan.", type: "error" }),
+          });
+        toast({
+          message: "Transaksi tersimpan.",
+          type: result.warning ? "warning" : "default",
+          description: result.warning,
+          actionLabel: "Batal",
+          onAction: undo,
+        });
+        onSaved();
+      },
+    });
+  return {
+    record,
+    submitting: save.isPending,
+    fieldErrors,
+    message: save.error && Object.keys(fieldErrors).length === 0 ? save.error.message : null,
+  };
+}
+
 export function TransactionForm({
   initial,
+  preset,
   today,
   submitting,
   fieldErrors,
@@ -43,6 +80,8 @@ export function TransactionForm({
   onSubmit,
 }: {
   initial?: Transaction;
+  /** Isian awal form baru, mis. "Tabung ke target" = Transfer ke dompet tabungan target (BR-08). */
+  preset?: { type: EntryType; walletId: number | null; toWalletId: number | null };
   /** Hari ini menurut zona waktu user (dari server). */
   today: string | undefined;
   submitting: boolean;
@@ -52,12 +91,14 @@ export function TransactionForm({
   onSubmit: (input: TransactionInput) => void;
 }) {
   const wallets = useWallets();
-  const [type, setType] = useState<EntryType>(initial && initial.type !== "adjustment" ? initial.type : "expense");
+  const [type, setType] = useState<EntryType>(initial && initial.type !== "adjustment" ? initial.type : (preset?.type ?? "expense"));
   const [amount, setAmount] = useState(initial ? groupThousands(initial.amount) : "");
   const [walletId, setWalletId] = useState<number | null>(
-    initial ? (initial.type === "income" ? initial.toWalletId : initial.fromWalletId) : null,
+    initial ? (initial.type === "income" ? initial.toWalletId : initial.fromWalletId) : (preset?.walletId ?? null),
   );
-  const [toWalletId, setToWalletId] = useState<number | null>(initial?.type === "transfer" ? initial.toWalletId : null);
+  const [toWalletId, setToWalletId] = useState<number | null>(
+    initial ? (initial.type === "transfer" ? initial.toWalletId : null) : (preset?.toWalletId ?? null),
+  );
   const [categoryId, setCategoryId] = useState<number | null>(initial?.categoryId ?? null);
   const [date, setDate] = useState<string | null>(initial?.transactionDate ?? null);
   const [noteOpen, setNoteOpen] = useState(Boolean(initial?.note));
@@ -267,12 +308,43 @@ function CategoryGrid({
 }
 
 function WalletPicker({ wallets, selected, onSelect }: { wallets: Wallet[]; selected: number | null; onSelect: (id: number) => void }) {
+  // Dompet terpilih saat form dibuka bisa berada di luar layar (mis. dompet tabungan di ujung kanan pada
+  // "Tabung ke target"): geser barisnya agar pilihan itu terlihat, sama dengan web. Hanya sekali saat tampil.
+  const scroller = useRef<ScrollViewInstance>(null);
+  const [initial] = useState(selected);
+  const layout = useRef<{ viewport?: number; chip?: { x: number; width: number }; done: boolean }>({ done: false });
+  const reveal = () => {
+    const { viewport, chip, done } = layout.current;
+    if (done || viewport === undefined || !chip) return;
+    layout.current.done = true;
+    const hiddenRight = chip.x + chip.width - viewport;
+    if (hiddenRight > 0) scroller.current?.scrollTo({ x: hiddenRight + 16, animated: false });
+  };
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bleed} contentContainerStyle={styles.walletRow}>
+    <ScrollView
+      ref={scroller}
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.bleed}
+      contentContainerStyle={styles.walletRow}
+      onLayout={(event) => {
+        layout.current.viewport = event.nativeEvent.layout.width;
+        reveal();
+      }}
+    >
       {wallets.map((wallet) => (
         <ChoiceChip
           key={wallet.id}
           selected={wallet.id === selected}
+          onLayout={
+            wallet.id === initial && initial !== null
+              ? (event) => {
+                  const { x, width } = event.nativeEvent.layout;
+                  layout.current.chip = { x, width };
+                  reveal();
+                }
+              : undefined
+          }
           onPress={() => onSelect(wallet.id)}
           accessibilityLabel={`${wallet.name}, saldo ${formatRupiah(wallet.balance)}`}
           style={styles.walletChip}

@@ -7,6 +7,7 @@ import {
   Text,
   TextInput,
   View,
+  type LayoutChangeEvent,
   type StyleProp,
   type TextInputProps,
   type TextProps,
@@ -251,6 +252,8 @@ export function ChoiceChip({
   children,
   style,
   accessibilityLabel,
+  disabled,
+  onLayout,
 }: {
   selected: boolean;
   onPress: () => void;
@@ -258,13 +261,18 @@ export function ChoiceChip({
   children?: ReactNode;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
+  /** Tidak bisa dipilih (web: input radio disabled); tampilannya diatur pemanggil (mis. opacity 60%). */
+  disabled?: boolean;
+  onLayout?: (event: LayoutChangeEvent) => void;
 }) {
   const theme = useTheme();
   return (
     <Pressable
       accessibilityRole="radio"
-      accessibilityState={{ selected }}
+      accessibilityState={{ selected, disabled: Boolean(disabled) }}
       accessibilityLabel={accessibilityLabel ?? label}
+      disabled={disabled}
+      onLayout={onLayout}
       onPress={onPress}
       style={({ pressed }) => [
         styles.chip,

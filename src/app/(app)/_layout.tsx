@@ -1,7 +1,7 @@
 import { Stack } from "expo-router";
 
 // Halaman setelah login. Tab (Beranda, Transaksi, Target, Akun) di bawah; Dompet, Ringkasan, dan detail
-// dompet didorong di atasnya (header sendiri seperti web). Form tampil sebagai bottom sheet
+// dompet/target didorong di atasnya (header sendiri seperti web). Form tampil sebagai bottom sheet
 // (transparentModal; animasi geser-naik dibuat sendiri di components/sheet.tsx).
 export const unstable_settings = { anchor: "(tabs)" };
 
@@ -13,10 +13,13 @@ export default function AppLayout() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="wallets" />
       <Stack.Screen name="wallet/[id]" />
+      <Stack.Screen name="goal/[id]/index" />
       <Stack.Screen name="summary" />
       <Stack.Screen name="transaction/new" options={SHEET} />
       <Stack.Screen name="transaction/[id]" options={SHEET} />
       <Stack.Screen name="wallet/new" options={SHEET} />
+      <Stack.Screen name="goal/new" options={SHEET} />
+      <Stack.Screen name="goal/[id]/deposit" options={SHEET} />
       <Stack.Screen name="sessions" />
       <Stack.Screen name="profile/email" options={SHEET} />
       <Stack.Screen name="profile/password" options={SHEET} />

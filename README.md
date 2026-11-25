@@ -7,10 +7,11 @@ Tampilan app **sama persis dengan PWA Lajur**: font Inter, ikon Boxicons (glyph 
 `react-native-svg`), token warna terang/gelap, logo bank/e-wallet, nav bawah kapsul kaca (Beranda · Transaksi · + ·
 Target · Akun), form sebagai bottom sheet, dan toast di atas layar.
 
-Isi: masuk/daftar, Beranda, Transaksi (filter dompet/kategori/jenis, total per tanggal), Dompet (daftar, tambah dengan
-logo, detail), Ringkasan bulanan, Target (daftar), Akun (profil, tema, kurangi efek kaca, keluar). Yang belum ada
-di API app (koreksi saldo/ubah/arsip dompet, buat target, ubah profil, utang & piutang, kategori, ekspor, akun demo)
-membuka halaman yang sama di web Lajur.
+Isi: masuk/daftar/lupa password/akun demo, Beranda, Transaksi (filter dompet/kategori/jenis, total per tanggal),
+Dompet (daftar, tambah dengan logo, detail: koreksi saldo, ubah nama, arsip/pulihkan), Ringkasan bulanan, Target
+(daftar, buat, detail, tabung, arsip/pulihkan), Akun (profil, email, password, perangkat, Telegram, tema, kurangi
+efek kaca, ekspor CSV, hapus akun, keluar). Yang belum ada di app (Utang & Piutang, Kategori, Sampah) masih membuka
+halaman yang sama di web Lajur. Tautan di email (konfirmasi email, reset password) memang membuka web.
 
 ## Pratinjau cepat di browser
 

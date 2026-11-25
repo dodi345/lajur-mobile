@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { useState, type ReactNode } from "react";
 import {
   Animated,
+  KeyboardAvoidingView,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -86,31 +87,35 @@ export function Page({
 
   return (
     <View style={[styles.flex, { backgroundColor: theme.background }]}>
-      <Animated.ScrollView
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        contentContainerStyle={[
-          styles.content,
-          { gap, paddingTop: insets.top + 24, paddingBottom: 24 + (tab ? NAV_SPACE + insets.bottom : insets.bottom) },
-        ]}
-        refreshControl={
-          onRefresh ? (
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[theme.primary]}
-              tintColor={theme.primary}
-              progressBackgroundColor={theme.muted}
-              progressViewOffset={insets.top}
-            />
-          ) : undefined
-        }
-      >
-        <View onLayout={onLayoutHeader}>
-          <PageHeader title={title} back={back} action={action} />
-        </View>
-        {children}
-      </Animated.ScrollView>
+      {/* Isian di bawah halaman (mis. "Nama dompet") tidak tertutup keyboard: tinggi gulir dikurangi keyboard. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.flex}>
+        <Animated.ScrollView
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={[
+            styles.content,
+            { gap, paddingTop: insets.top + 24, paddingBottom: 24 + (tab ? NAV_SPACE + insets.bottom : insets.bottom) },
+          ]}
+          refreshControl={
+            onRefresh ? (
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[theme.primary]}
+                tintColor={theme.primary}
+                progressBackgroundColor={theme.muted}
+                progressViewOffset={insets.top}
+              />
+            ) : undefined
+          }
+        >
+          <View onLayout={onLayoutHeader}>
+            <PageHeader title={title} back={back} action={action} />
+          </View>
+          {children}
+        </Animated.ScrollView>
+      </KeyboardAvoidingView>
       <Animated.View
         pointerEvents={shown ? "auto" : "none"}
         style={[styles.condensed, { opacity: condensed }]}

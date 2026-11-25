@@ -104,6 +104,16 @@ function apiResponse(path: string): unknown {
       ],
     },
     "/api/v1/wallets/1": { wallet, transactions },
+    "/api/v1/wallets/2": { wallet: minus, transactions },
+    "/api/v1/goals/7": { today: "2026-11-25", goal, deposit: { fromWalletId: 1, toWalletId: 2 } },
+    "/api/v1/goals/8": { today: "2026-11-25", goal: { ...goal, id: 8, archived: true, achievedOn: "2026-10-12" }, deposit: null },
+    "/api/v1/goals/savings-wallets": {
+      today: "2026-11-25",
+      wallets: [
+        { id: 2, name: "Dompet harian", brand: null, balance: 4_200_000, usedBy: "Dana darurat" },
+        { id: 5, name: "Celengan", brand: null, balance: 0, usedBy: null },
+      ],
+    },
     "/api/v1/categories": { categories },
     "/api/v1/transactions": {
       month: "2026-11",
@@ -150,7 +160,13 @@ const cases: [string, string | RegExp][] = [
   ["/transaction/new", "Catat transaksi"],
   ["/transaction/10", "Simpan perubahan"],
   ["/wallet/new", "Tambah dompet"],
-  ["/wallet/1", "Saldo di aplikasi ini"],
+  ["/wallet/1", "Simpan koreksi"],
+  // Saldo minus: peringatan (BR-07) di kartu dan di pratinjau koreksi.
+  ["/wallet/2", "Saldo akan minus."],
+  ["/goal/7", "Tabung sekarang"],
+  ["/goal/8", "Dana darurat (diarsipkan)"],
+  ["/goal/7/deposit", "Tabung ke Dana darurat"],
+  ["/goal/new", 'Sudah dipakai target "Dana darurat"'],
   ["/sessions", "Terakhir aktif 24 Nov 2026, 14.05"],
   ["/profile/email", "Belum dikonfirmasi"],
   ["/profile/password", "Ulangi password baru"],

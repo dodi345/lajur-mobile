@@ -1,18 +1,18 @@
+import { router } from "expo-router";
 import { useState } from "react";
-import { Linking, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { AchievedGoalRow, GoalCard } from "@/components/finance";
 import { Icon } from "@/components/icon";
 import { Page } from "@/components/screen";
 import { AppText, Button, EmptyState, ErrorState, Loading } from "@/components/ui";
-import { API_URL } from "@/lib/api";
 import { formatRupiah } from "@/lib/money";
 import { useGoals } from "@/lib/queries";
 import { RADIUS, TOUCH, useTheme } from "@/lib/theme";
 
 // Target (US-13) = app/(app)/goals/page.tsx web: aktif, tercapai, diarsipkan. Progres dari server (BR-08).
-// Membuat, menabung, dan mengubah target belum ada di API app (tahap 2): tombolnya membuka web Lajur.
 
-const openWeb = (path: string) => void Linking.openURL(`${API_URL}${path}`);
+const newGoal = () => router.push("/goal/new");
+const openGoal = (id: number) => router.push(`/goal/${id}`);
 
 export default function GoalsScreen() {
   const theme = useTheme();
@@ -28,7 +28,7 @@ export default function GoalsScreen() {
       title="Target"
       tab
       gap={20}
-      action={<Button label="Tambah" icon="Plus" variant="outline" onPress={() => openWeb("/goals/new")} />}
+      action={<Button label="Tambah" icon="Plus" variant="outline" onPress={newGoal} />}
       refreshing={query.isRefetching}
       onRefresh={() => void query.refetch()}
     >
@@ -41,7 +41,7 @@ export default function GoalsScreen() {
           title="Belum ada target"
           message="Buat target, misalnya dana darurat atau liburan, lalu pantau progresnya."
           link="Buat target pertama"
-          onLink={() => openWeb("/goals/new")}
+          onLink={newGoal}
         />
       ) : (
         <>
@@ -51,7 +51,7 @@ export default function GoalsScreen() {
                 Aktif
               </AppText>
               {active.map((goal) => (
-                <GoalCard key={goal.id} goal={goal} onPress={() => openWeb(`/goals/${goal.id}`)} />
+                <GoalCard key={goal.id} goal={goal} onPress={() => openGoal(goal.id)} />
               ))}
             </View>
           ) : null}
@@ -61,7 +61,7 @@ export default function GoalsScreen() {
                 Tercapai
               </AppText>
               {achieved.map((goal) => (
-                <AchievedGoalRow key={goal.id} goal={goal} onPress={() => openWeb(`/goals/${goal.id}`)} />
+                <AchievedGoalRow key={goal.id} goal={goal} onPress={() => openGoal(goal.id)} />
               ))}
             </View>
           ) : null}
@@ -81,7 +81,7 @@ export default function GoalsScreen() {
                     <Pressable
                       key={goal.id}
                       accessibilityRole="button"
-                      onPress={() => openWeb(`/goals/${goal.id}`)}
+                      onPress={() => openGoal(goal.id)}
                       style={({ pressed }) => [styles.archivedRow, pressed && { backgroundColor: theme.muted }]}
                     >
                       <View style={styles.flex}>

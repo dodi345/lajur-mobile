@@ -170,6 +170,16 @@ export type Goal = {
   progress: GoalProgress;
 };
 
+export type GoalDetail = {
+  today: string;
+  goal: Goal;
+  /** Isian awal "Tabung sekarang" (transfer ke dompet target); null kalau target diarsipkan. */
+  deposit: { fromWalletId: number | null; toWalletId: number | null } | null;
+};
+
+/** Pilihan dompet form "Target baru": dompet Tabungan aktif; `usedBy` = target aktif yang memakainya. */
+export type SavingsWalletOption = { id: number; name: string; brand: string | null; balance: number; usedBy: string | null };
+
 export type TransactionList = {
   month: string;
   today: string;

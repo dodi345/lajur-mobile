@@ -3,11 +3,13 @@ import {
   request,
   type Category,
   type Goal,
+  type GoalDetail,
   type Home,
   type DeviceSession,
   type MessageResult,
   type MonthlySummary,
   type ProfileResponse,
+  type SavingsWalletOption,
   type SaveResult,
   type Transaction,
   type TransactionInput,
@@ -194,6 +196,68 @@ export function useCreateWallet() {
   const refresh = useRefreshAll();
   return useMutation({
     mutationFn: (input: WalletInput) => request<{ id: number }>("/api/v1/wallets", { method: "POST", body: input }),
+    onSuccess: refresh,
+  });
+}
+
+/** Koreksi saldo (BR-04): saldo sebenarnya, atau tambah/kurangi. */
+export type AdjustInput =
+  | { mode: "actual"; actualBalance: number | null }
+  | { mode: "delta"; direction: "in" | "out"; amount: number | null };
+
+export function useAdjustWallet(id: number) {
+  const refresh = useRefreshAll();
+  return useMutation({
+    mutationFn: (input: AdjustInput) => request<MessageResult>(`/api/v1/wallets/${id}/adjust`, { method: "POST", body: input }),
+    onSuccess: refresh,
+  });
+}
+
+export function useRenameWallet(id: number) {
+  const refresh = useRefreshAll();
+  return useMutation({
+    mutationFn: (name: string) => request<MessageResult>(`/api/v1/wallets/${id}`, { method: "PATCH", body: { name } }),
+    onSuccess: refresh,
+  });
+}
+
+/** Arsipkan (true) atau pulihkan (false) dompet (US-05, BR-09). */
+export function useSetWalletArchived(id: number) {
+  const refresh = useRefreshAll();
+  return useMutation({
+    mutationFn: (archived: boolean) =>
+      request<MessageResult>(`/api/v1/wallets/${id}/${archived ? "archive" : "restore"}`, { method: "POST" }),
+    onSuccess: refresh,
+  });
+}
+
+export function useGoal(id: number) {
+  return useQuery({ queryKey: ["goal", id], queryFn: () => request<GoalDetail>(`/api/v1/goals/${id}`) });
+}
+
+export function useSavingsWallets() {
+  return useQuery({
+    queryKey: ["savings-wallets"],
+    queryFn: () => request<{ today: string; wallets: SavingsWalletOption[] }>("/api/v1/goals/savings-wallets"),
+  });
+}
+
+export type GoalInput = { name: string; targetAmount: number | null; deadline: string | null; wallet: "new" | number };
+
+export function useCreateGoal() {
+  const refresh = useRefreshAll();
+  return useMutation({
+    mutationFn: (input: GoalInput) => request<{ id: number; message: string }>("/api/v1/goals", { method: "POST", body: input }),
+    onSuccess: refresh,
+  });
+}
+
+/** Arsipkan (true) atau pulihkan (false) target. Pulihkan bisa ditolak (409) kalau dompetnya dipakai target lain. */
+export function useSetGoalArchived(id: number) {
+  const refresh = useRefreshAll();
+  return useMutation({
+    mutationFn: (archived: boolean) =>
+      request<MessageResult>(`/api/v1/goals/${id}/${archived ? "archive" : "restore"}`, { method: "POST" }),
     onSuccess: refresh,
   });
 }
