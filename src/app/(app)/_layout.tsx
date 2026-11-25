@@ -1,5 +1,8 @@
 import { Stack } from "expo-router";
 
+// Layar modal (catat transaksi, tambah dompet) selalu punya tab di bawahnya, juga kalau dibuka langsung.
+export const unstable_settings = { anchor: "(tabs)" };
+
 export default function AppLayout() {
   return (
     <Stack screenOptions={{ headerShadowVisible: false }}>

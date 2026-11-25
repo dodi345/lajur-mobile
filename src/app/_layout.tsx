@@ -38,8 +38,11 @@ function RootNavigator() {
       <Stack.Protected guard={signedIn}>
         <Stack.Screen name="(app)" />
       </Stack.Protected>
+      {/* Masuk/Daftar langsung di stack akar (bukan grup): kalau belum login, alamat awal "/" (Beranda,
+          terkunci) dialihkan ke layar pertama yang tersedia, yaitu login. Dalam grup, "/" jadi Unmatched Route. */}
       <Stack.Protected guard={!signedIn}>
-        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="login" />
+        <Stack.Screen name="register" options={{ headerShown: true, headerTitle: "", headerShadowVisible: false }} />
       </Stack.Protected>
     </Stack>
   );

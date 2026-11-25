@@ -41,7 +41,7 @@ npx expo-doctor     # cek kecocokan dependency dengan SDK
 ## Struktur
 
 ```
-src/app/            layar (expo-router): (auth)/ masuk & daftar, (app)/(tabs)/ empat tab, transaction/, wallet/, profile
+src/app/            layar (expo-router): login + register (di akar), (app)/(tabs)/ empat tab, transaction/, wallet/, profile
 src/components/     ui (teks, tombol, input, chip), finance (baris transaksi/dompet, ringkasan), form transaksi, toast
 src/lib/            api (klien /api/v1 + tipe), auth (sesi, SecureStore), queries (TanStack Query), money, date, theme
 ```
