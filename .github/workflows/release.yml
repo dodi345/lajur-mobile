@@ -1,6 +1,8 @@
 name: Rilis APK
 
-# Tag vX.Y.Z → cek kode → APK bertanda tangan kunci Lajur → GitHub Release berisi lajur.apk.
+# Tag vX.Y.Z → cek kode → APK bertanda tangan kunci Lajur → GitHub Release berisi lajur.apk (HP 64-bit,
+# hampir semua HP) dan lajur-32bit.apk (HP 32-bit lama). Satu build Gradle, satu APK per prosesor
+# (plugins/with-abi-splits.js); kode diperkecil R8 dan library native dikompres (expo-build-properties).
 # Nomor versi hanya dari tag: v1.2.3 → versionName 1.2.3, versionCode 10203 (harus selalu naik).
 # Secret wajib: ANDROID_KEYSTORE_BASE64 (keystore PKCS12, alias "lajur") dan ANDROID_KEYSTORE_PASSWORD.
 on:
@@ -82,14 +84,14 @@ jobs:
 
       - name: Build APK rilis
         working-directory: android
-        # Hanya arsitektur HP sungguhan (64 + 32 bit ARM): APK jauh lebih kecil dan build lebih cepat.
+        # Hanya arsitektur HP sungguhan (64 + 32 bit ARM); split ABI menjadikannya dua APK terpisah.
         run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
 
       - name: Pastikan APK ditandatangani kunci Lajur (bukan kunci debug)
         id: signature
         shell: bash
         run: |
-          APK=android/app/build/outputs/apk/release/app-release.apk
+          OUT=android/app/build/outputs/apk/release
           # apksigner dari build-tools terbaru bisa butuh Java lebih baru dari Java untuk build (17).
           export JAVA_HOME="${JAVA_HOME_21_X64:-$JAVA_HOME}"
           export PATH="$JAVA_HOME/bin:$PATH"
@@ -102,27 +104,38 @@ jobs:
             exit 1
           fi
           echo "apksigner: $APKSIGNER (versi $("$APKSIGNER" --version))"
-          # Isi sertifikat (nama + sidik jari) bukan rahasia; dicetak supaya kegagalan mudah dibaca.
-          "$APKSIGNER" verify --print-certs "$APK" | tee certs.txt
-          # Format baris beda antar versi apksigner ("Signer #1 certificate ..." / "V2 Signer: certificate ...").
-          # Semua skema tanda tangan harus memakai satu sertifikat yang sama.
-          ACTUAL=$(sed -n 's/^.*certificate SHA-256 digest: //p' certs.txt | sort -u)
-          if [ "$(printf '%s\n' "$ACTUAL" | grep -c .)" -gt 1 ]; then
-            echo "::error::APK ditandatangani lebih dari satu sertifikat"
-            exit 1
-          fi
           EXPECTED=$(keytool -list -v -keystore "$LAJUR_KEYSTORE_PATH" -storepass:env LAJUR_KEYSTORE_PASSWORD -alias lajur \
             | sed -n 's/^[[:space:]]*SHA256: //p' | tr -d ':' | tr 'A-F' 'a-f')
-          echo "Sertifikat APK : ${ACTUAL:-(kosong)}"
           echo "Kunci Lajur    : ${EXPECTED:-(kosong)}"
-          if [ -z "$ACTUAL" ] || [ "$ACTUAL" != "$EXPECTED" ]; then
-            echo "::error::Sertifikat APK tidak sama dengan kunci Lajur"
-            exit 1
-          fi
-          echo "sha256=$ACTUAL" >> "$GITHUB_OUTPUT"
           mkdir -p release
-          cp "$APK" release/lajur.apk
-          (cd release && sha256sum lajur.apk > lajur.apk.sha256)
+          # Nama file rilis: lajur.apk = 64-bit (tautan unduhan tetap sama), lajur-32bit.apk = HP 32-bit lama.
+          for pair in "arm64-v8a:lajur.apk" "armeabi-v7a:lajur-32bit.apk"; do
+            ABI="${pair%%:*}"
+            NAME="${pair#*:}"
+            APK="$OUT/app-$ABI-release.apk"
+            if [ ! -f "$APK" ]; then
+              echo "::error::APK $ABI tidak ditemukan ($APK)"
+              ls -l "$OUT" || true
+              exit 1
+            fi
+            # Isi sertifikat (nama + sidik jari) bukan rahasia; dicetak supaya kegagalan mudah dibaca.
+            "$APKSIGNER" verify --print-certs "$APK" | tee "certs-$ABI.txt"
+            # Format baris beda antar versi apksigner ("Signer #1 certificate ..." / "V2 Signer: certificate ...").
+            # Semua skema tanda tangan harus memakai satu sertifikat yang sama.
+            ACTUAL=$(sed -n 's/^.*certificate SHA-256 digest: //p' "certs-$ABI.txt" | sort -u)
+            if [ "$(printf '%s\n' "$ACTUAL" | grep -c .)" -gt 1 ]; then
+              echo "::error::APK $ABI ditandatangani lebih dari satu sertifikat"
+              exit 1
+            fi
+            echo "Sertifikat $ABI: ${ACTUAL:-(kosong)}"
+            if [ -z "$ACTUAL" ] || [ "$ACTUAL" != "$EXPECTED" ]; then
+              echo "::error::Sertifikat APK $ABI tidak sama dengan kunci Lajur"
+              exit 1
+            fi
+            cp "$APK" "release/$NAME"
+            (cd release && sha256sum "$NAME" > "$NAME.sha256")
+          done
+          echo "sha256=$EXPECTED" >> "$GITHUB_OUTPUT"
           ls -lh release
 
       - name: Hapus kunci dari runner
@@ -141,11 +154,13 @@ jobs:
           **Cara pasang:** unduh \`lajur.apk\` dari HP Android, buka filenya, lalu izinkan browser memasang
           aplikasi kalau diminta. Masuk dengan akun Lajur yang sama dengan web; datanya sama.
 
+          HP Android lama (32-bit) yang tidak bisa memasang \`lajur.apk\`: pakai \`lajur-32bit.apk\`.
+
           Sidik jari sertifikat (SHA-256): \`$CERT_SHA256\`
           NOTES
           if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" release/lajur.apk release/lajur.apk.sha256 --clobber
+            gh release upload "$GITHUB_REF_NAME" release/* --clobber
           else
-            gh release create "$GITHUB_REF_NAME" release/lajur.apk release/lajur.apk.sha256 \
+            gh release create "$GITHUB_REF_NAME" release/* \
               --verify-tag --title "Lajur $VERSION" --notes-file notes.md
           fi

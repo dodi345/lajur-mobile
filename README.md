@@ -83,8 +83,10 @@ APK dibangun di GitHub Actions, tidak di laptop atau server. Caranya:
 git tag v1.0.1 && git push origin v1.0.1
 ```
 
-Workflow `Rilis APK` lalu: menjalankan lint/typecheck/test → `expo prebuild` → Gradle `assembleRelease` (arm64 + armv7)
-→ memastikan APK ditandatangani kunci Lajur → membuat GitHub Release berisi `lajur.apk` + checksum (±15–20 menit).
+Workflow `Rilis APK` lalu: menjalankan lint/typecheck/test → `expo prebuild` → Gradle `assembleRelease` (arm64 + armv7,
+satu APK per prosesor lewat `plugins/with-abi-splits.js`; kode diperkecil R8 dan library native dikompres lewat
+`expo-build-properties`) → memastikan kedua APK ditandatangani kunci Lajur → membuat GitHub Release berisi
+`lajur.apk` (HP 64-bit) dan `lajur-32bit.apk` (HP 32-bit lama), masing-masing dengan checksum (±15–20 menit).
 
 - Nomor versi hanya dari tag: `v1.2.3` → versi 1.2.3, versionCode 10203. Tag berikutnya harus selalu lebih besar,
   kalau tidak Android menolak update.
